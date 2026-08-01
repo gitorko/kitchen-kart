@@ -10,7 +10,7 @@ async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
   const { apartment, newPin } = req.body || {};
   if (!apartment?.trim() || !newPin?.trim())
-    return res.status(400).json({ error: 'Flat number and new PIN are required' });
+    return res.status(400).json({ error: 'Apartment number and new PIN are required' });
   if (!/^\d{4}$/.test(newPin))
     return res.status(400).json({ error: 'PIN must be exactly 4 digits' });
 
@@ -19,7 +19,7 @@ async function handler(req, res) {
   const rows = await sql`SELECT data FROM users WHERE data->>'apartment' = ${apartment.trim()}`;
   const user = rows[0]?.data;
   if (!user || user.status !== 'approved')
-    return res.status(404).json({ error: 'No approved account found for that flat number' });
+    return res.status(404).json({ error: 'No approved account found for that apartment number' });
 
   const code = generateCode();
   const updated = {

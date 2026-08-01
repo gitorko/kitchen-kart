@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { T } from './theme.js';
 import { getSession, isImpersonating, stopImpersonation } from './lib/auth.js';
-import { logout, fetchApprovals, submitApproval, impersonateUser } from './lib/authApi.js';
+import { logout, fetchApprovals, submitApproval, impersonateUser, deleteUser } from './lib/authApi.js';
 import { kitchensApi, dishesApi, ordersApi, toggleDishHeart, toggleKitchenFavorite } from './lib/api.js';
 import LoginPage from './components/LoginPage.jsx';
 import SignupPage from './components/SignupPage.jsx';
@@ -12,6 +12,7 @@ import KitchenDashboard from './components/KitchenDashboard.jsx';
 import AdminApprovals from './components/AdminApprovals.jsx';
 import AdminUsers from './components/AdminUsers.jsx';
 import AdminKitchens from './components/AdminKitchens.jsx';
+import AdminOrders from './components/AdminOrders.jsx';
 import CartDrawer from './components/CartDrawer.jsx';
 import UserMenu from './components/UserMenu.jsx';
 
@@ -287,11 +288,25 @@ function AppShell({ session, onRequireAuth, onLogout }) {
     window.location.reload();
   }
 
+  // ── Admin: delete a user (and their kitchen + dishes, if they ran one) ──
+  async function deleteUserAccount(userId) {
+    const kitchen = kitchens.find(k => k.ownerUserId === userId);
+    if (kitchen) {
+      const dishIds = dishes.filter(d => d.kitchenId === kitchen.id).map(d => d.id);
+      await Promise.all(dishIds.map(id => dishesApi.remove(id)));
+      await kitchensApi.remove(kitchen.id);
+      setKitchens(prev => prev.filter(k => k.id !== kitchen.id));
+      setDishes(prev => prev.filter(d => d.kitchenId !== kitchen.id));
+    }
+    await deleteUser(userId);
+  }
+
   const TABS = [
     { key: 'home', label: '🏠 Home' },
     session?.role === 'customer' && { key: 'orders', label: '🧾 My Orders' },
     session?.role === 'kitchen' && { key: 'kitchen', label: '👩‍🍳 My Kitchen' },
     session && canApprove && { key: 'approvals', label: `✅ Approvals${approvals.pending.length ? ` (${approvals.pending.length})` : ''}` },
+    session?.role === 'admin' && { key: 'all-orders', label: '🧾 All Orders' },
     session?.role === 'admin' && { key: 'users', label: '👥 Users' },
     session?.role === 'admin' && { key: 'kitchens', label: '🏠 Kitchens' },
   ].filter(Boolean);
@@ -382,8 +397,10 @@ function AppShell({ session, onRequireAuth, onLogout }) {
             onApprove={approveUser} onReject={rejectUser}
             onApprovePinReset={approvePinReset} onRejectPinReset={rejectPinReset}
           />
+        ) : tab === 'all-orders' ? (
+          <AdminOrders orders={orders} />
         ) : tab === 'users' ? (
-          <AdminUsers onImpersonate={handleImpersonate} />
+          <AdminUsers onImpersonate={handleImpersonate} onDeleteUser={deleteUserAccount} />
         ) : tab === 'kitchens' ? (
           <AdminKitchens kitchens={kitchens} dishes={dishes} onDelete={deleteKitchen} />
         ) : null}

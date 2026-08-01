@@ -15,7 +15,7 @@ export default function ForgotPinPage({ onGoLogin }) {
     e.preventDefault();
     if (loading) return;
     setError('');
-    if (!apartment.trim()) return setError('Flat number is required.');
+    if (!apartment.trim()) return setError('Apartment number is required.');
     if (!/^\d{4}$/.test(newPin)) return setError('New PIN must be exactly 4 digits.');
     if (newPin !== confirmPin) return setError('PINs do not match.');
 
@@ -80,7 +80,7 @@ export default function ForgotPinPage({ onGoLogin }) {
         </div>
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
-            <label style={LABEL}>Flat Number</label>
+            <label style={LABEL}>Apartment Number</label>
             <input autoFocus style={INPUT} value={apartment} onChange={e => setApartment(e.target.value)} placeholder="e.g. B-204" />
           </div>
           <div style={{ display: 'flex', gap: 10 }}>

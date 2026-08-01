@@ -4,12 +4,12 @@ A home-kitchen ordering app: kitchens (house wives) list dishes, neighbors brows
 
 ## Accounts & login
 
-- **Login is flat number + 4-digit PIN** — not phone/email. Phone is still captured at signup for contact purposes, but never used to sign in.
-- **Signup**: name, phone, flat number, PIN. Creates a `pending` account and issues a short CODE + shareable link (`/?approve=CODE`), with a one-tap WhatsApp share button.
-- **Apartment turnover**: signing up with a flat number that already has an account prompts "are you the new owner/tenant?" — confirming lets the signup proceed as a pending replacement. On approval, the old resident's account (and their kitchen + dishes, if they ran one) is deleted; order history is kept.
+- **Login is apartment number + 4-digit PIN** — not phone/email. Phone is still captured at signup for contact purposes, but never used to sign in.
+- **Signup**: name, phone, apartment number, PIN. Creates a `pending` account and issues a short CODE + shareable link (`/?approve=CODE`), with a one-tap WhatsApp share button.
+- **Apartment turnover**: signing up with a apartment number that already has an account prompts "are you the new owner/tenant?" — confirming lets the signup proceed as a pending replacement. On approval, the old resident's account (and their kitchen + dishes, if they ran one) is deleted; order history is kept.
 - **Approvals**: only an admin, or any *approved kitchen* (kitchens are "low-level admins"), can approve/reject pending signups. Rejections can include a reason. Every decision is logged permanently in an approval history.
-- **Forgot PIN**: request a reset from the login screen (new PIN + flat number) — issues a CODE the same way signup does. The **old PIN keeps working** until an admin/kitchen approves the reset; approving swaps in the new PIN, rejecting discards the request.
-- **Bootstrap admin**: a single env-configured identity (`ADMIN_FLAT` / `ADMIN_PIN`) with no real flat, typed into the same login field. Not a database row.
+- **Forgot PIN**: request a reset from the login screen (new PIN + apartment number) — issues a CODE the same way signup does. The **old PIN keeps working** until an admin/kitchen approves the reset; approving swaps in the new PIN, rejecting discards the request.
+- **Bootstrap admin**: a single env-configured identity (`ADMIN_APARTMENT` / `ADMIN_PIN`) with no real apartment, typed into the same login field. Not a database row.
 - **Admin impersonation**: from a "Users" tab, admin can sign in as any approved user (short-lived token) to see the app exactly as they would — with a "Viewing as…" banner and one-click return to their own session.
 
 ## Browsing (public, no login required)

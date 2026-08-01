@@ -11,10 +11,10 @@ npm run dev
 
 Open `http://localhost:5173`. Data is saved to browser localStorage — no database needed.
 
-Login is by **flat number + 4-digit PIN** (not phone — phone is captured at signup for contact purposes only). `.env.local` has the bootstrap admin login, typed into the "Flat Number" field:
+Login is by **apartment number + 4-digit PIN** (not phone — phone is captured at signup for contact purposes only). `.env.local` has the bootstrap admin login, typed into the "Apartment Number" field:
 
 ```bash
-ADMIN_FLAT=0000
+ADMIN_APARTMENT=0000
 ADMIN_PIN=1234
 ```
 
@@ -28,7 +28,7 @@ Sign up as "Kitchen" or "Customer", then approve the account by logging in as ad
 
    | Variable      | Value                                                         |
    | ------------- | ------------------------------------------------------------- |
-   | `ADMIN_FLAT`  | bootstrap admin's login identifier (typed into "Flat Number") |
+   | `ADMIN_APARTMENT`  | bootstrap admin's login identifier (typed into "Apartment Number") |
    | `ADMIN_PIN`   | bootstrap admin's 4-digit PIN                                 |
    | `AUTH_SECRET` | `openssl rand -hex 32`                                        |
 
@@ -38,7 +38,7 @@ To change the admin PIN: update `ADMIN_PIN` in Vercel and redeploy.
 
 ## How approvals work
 
-Signup collects name, phone, flat number, and a 4-digit PIN, and issues a CODE + shareable link. Signer shares it on WhatsApp; an admin or any approved kitchen (kitchens are low-level admins) approves from **Approvals**. Every decision — including a rejection reason, if given — is logged permanently.
+Signup collects name, phone, apartment number, and a 4-digit PIN, and issues a CODE + shareable link. Signer shares it on WhatsApp; an admin or any approved kitchen (kitchens are low-level admins) approves from **Approvals**. Every decision — including a rejection reason, if given — is logged permanently.
 
 ## E2E tests
 

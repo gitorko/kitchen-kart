@@ -18,17 +18,17 @@ const USERS_KEY = 'kk_users';
 const APPROVALS_KEY = 'kk_approvals';
 
 function adminCreds() {
-  return { flat: import.meta.env.ADMIN_FLAT, pin: import.meta.env.ADMIN_PIN };
+  return { apartment: import.meta.env.ADMIN_APARTMENT, pin: import.meta.env.ADMIN_PIN };
 }
 
 export async function signup({ name, phone, apartment, pin, role, replacingExisting }) {
   if (IS_DEV) {
     const users = lsGet(USERS_KEY, []);
-    const { flat: adminFlat } = adminCreds();
-    if (apartment === adminFlat) throw new Error('An account with this flat number already exists');
+    const { apartment: adminApartment } = adminCreds();
+    if (apartment === adminApartment) throw new Error('An account with this apartment number already exists');
     const existingUser = users.find(u => u.apartment === apartment);
     if (existingUser && !replacingExisting) {
-      const err = new Error('An account with this flat number already exists.');
+      const err = new Error('An account with this apartment number already exists.');
       err.apartmentTaken = true;
       throw err;
     }
@@ -52,14 +52,14 @@ export async function signup({ name, phone, apartment, pin, role, replacingExist
 export async function login({ apartment, pin }) {
   if (IS_DEV) {
     const admin = adminCreds();
-    if (admin.flat && admin.pin && apartment === admin.flat && pin === admin.pin) {
+    if (admin.apartment && admin.pin && apartment === admin.apartment && pin === admin.pin) {
       const session = { token: 'dev', userId: 'admin', role: 'admin', name: 'Admin' };
       setSession(session);
       return session;
     }
     const users = lsGet(USERS_KEY, []);
     const user = users.find(u => u.apartment === apartment);
-    if (!user || user.pin !== pin) throw new Error('Invalid flat number or PIN');
+    if (!user || user.pin !== pin) throw new Error('Invalid apartment number or PIN');
     if (user.status !== 'approved') {
       const err = new Error(
         user.status === 'rejected'
@@ -91,7 +91,7 @@ export async function requestPinReset({ apartment, newPin }) {
   if (IS_DEV) {
     const users = lsGet(USERS_KEY, []);
     const user = users.find(u => u.apartment === apartment);
-    if (!user || user.status !== 'approved') throw new Error('No approved account found for that flat number');
+    if (!user || user.status !== 'approved') throw new Error('No approved account found for that apartment number');
     const code = generateCode();
     user.pinResetRequest = { newPin, code, requestedAt: new Date().toISOString() };
     lsSet(USERS_KEY, users);
@@ -170,6 +170,18 @@ export async function fetchAllUsers() {
     return lsGet(USERS_KEY, []).map(({ pin, ...rest }) => rest);
   }
   return parseJson(await authFetch('/api/users'));
+}
+
+// Admin-only: delete a user outright. Only removes the user record — if they
+// ran a kitchen, the caller is responsible for also removing that kitchen and
+// its dishes (dev mode has no server to cascade automatically).
+export async function deleteUser(userId) {
+  if (IS_DEV) {
+    lsSet(USERS_KEY, lsGet(USERS_KEY, []).filter(u => u.id !== userId));
+    return;
+  }
+  const res = await authFetch(`/api/users?userId=${userId}`, { method: 'DELETE' });
+  return parseJson(res);
 }
 
 // Admin-only: sign in as another approved user without knowing their PIN, to see

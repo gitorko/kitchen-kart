@@ -61,7 +61,7 @@ async function handler(req, res) {
       return res.status(201).json(log);
     }
 
-    // Approving a signup that's replacing whoever currently holds the flat
+    // Approving a signup that's replacing whoever currently holds the apartment
     // (a new owner/tenant moved in) — remove the old resident's account and,
     // if they ran a kitchen, that kitchen and its dishes too. Order history
     // is left alone.

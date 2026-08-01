@@ -6,15 +6,15 @@
 // Usage: node e2e/photo-upload.mjs
 
 import { chromium } from 'playwright';
-import { BASE_URL, loadEnvLocal, randomPhone, randomFlat, shooter, assertServerUp, trackConsoleErrors, FIXTURE_PHOTO } from './_helpers.mjs';
+import { BASE_URL, loadEnvLocal, randomPhone, randomApartment, shooter, assertServerUp, trackConsoleErrors, FIXTURE_PHOTO } from './_helpers.mjs';
 
 await assertServerUp();
 
 const env = loadEnvLocal();
-const ADMIN_FLAT = env.ADMIN_FLAT;
+const ADMIN_APARTMENT = env.ADMIN_APARTMENT;
 const ADMIN_PIN = env.ADMIN_PIN;
-if (!ADMIN_FLAT || !ADMIN_PIN) {
-  throw new Error('ADMIN_FLAT / ADMIN_PIN not found in .env.local — needed to sign in as the bootstrap admin.');
+if (!ADMIN_APARTMENT || !ADMIN_PIN) {
+  throw new Error('ADMIN_APARTMENT / ADMIN_PIN not found in .env.local — needed to sign in as the bootstrap admin.');
 }
 
 const browser = await chromium.launch({ args: ['--no-sandbox'] });
@@ -24,11 +24,11 @@ const shot = shooter(page, 'photo-upload');
 const errors = trackConsoleErrors(page);
 
 const kitchenPhone = randomPhone();
-const kitchenFlat = randomFlat('A');
+const kitchenApartment = randomApartment('A');
 
-async function login(flat, pin) {
-  await page.waitForSelector('text=Flat Number');
-  await page.locator('input[placeholder="e.g. B-204"]').first().fill(flat);
+async function login(apartment, pin) {
+  await page.waitForSelector('text=Apartment Number');
+  await page.locator('input[placeholder="e.g. B-204"]').first().fill(apartment);
   await page.locator('input[placeholder="••••"]').first().fill(pin);
   await page.getByRole('button', { name: 'Sign In' }).click();
 }
@@ -42,7 +42,7 @@ try {
   await page.getByText('Cook & sell').click();
   await page.locator('input[placeholder="Your full name"]').fill('Photo Test Kitchen');
   await page.locator('input[placeholder="10-digit mobile number"]').fill(kitchenPhone);
-  await page.locator('input[placeholder="e.g. B-204"]').fill(kitchenFlat);
+  await page.locator('input[placeholder="e.g. B-204"]').fill(kitchenApartment);
   const pinInputs = page.locator('input[type="password"]');
   await pinInputs.nth(0).fill('9998');
   await pinInputs.nth(1).fill('9998');
@@ -50,7 +50,7 @@ try {
   await page.waitForSelector('text=Account created!');
   await page.getByText('← Back to sign in').click();
 
-  await login(ADMIN_FLAT, ADMIN_PIN);
+  await login(ADMIN_APARTMENT, ADMIN_PIN);
   await page.waitForSelector('text=Approvals');
   await page.getByRole('button', { name: /Approvals/ }).click();
   const row = page.locator('div', { hasText: 'Photo Test Kitchen' }).filter({ hasText: 'Approve' }).first();
@@ -61,7 +61,7 @@ try {
 
   await page.waitForTimeout(200);
   await page.getByRole('button', { name: 'Sign In' }).click();
-  await login(kitchenFlat, '9998');
+  await login(kitchenApartment, '9998');
   await page.waitForSelector('text=My Kitchen');
   await page.getByRole('button', { name: /My Kitchen/ }).click();
   await page.waitForSelector('text=Set up your kitchen');

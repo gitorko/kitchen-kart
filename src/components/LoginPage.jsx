@@ -41,7 +41,7 @@ export default function LoginPage({ onLogin, onGoSignup, onGoForgotPin, onBack }
         </div>
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
-            <label style={LABEL}>Flat Number</label>
+            <label style={LABEL}>Apartment Number</label>
             <input
               autoFocus autoComplete="off" value={apartment}
               onChange={e => setApartment(e.target.value)}

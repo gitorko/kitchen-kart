@@ -5,7 +5,7 @@ import { fetchAllUsers } from '../lib/authApi.js';
 
 const ROLE_LABEL = { customer: '🛒 Customer', kitchen: '👩‍🍳 Kitchen', admin: '🛡️ Admin' };
 
-export default function AdminUsers({ onImpersonate }) {
+export default function AdminUsers({ onImpersonate, onDeleteUser }) {
   const [users, setUsers] = useState(null);
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState(null);
@@ -25,6 +25,19 @@ export default function AdminUsers({ onImpersonate }) {
     }
   }
 
+  async function handleDelete(user) {
+    if (!confirm(`Delete ${user.name} (Apt ${user.apartment})? This also removes their kitchen and dishes if they run one. This cannot be undone.`)) return;
+    setError('');
+    setBusyId(user.id);
+    try {
+      await onDeleteUser(user.id);
+      setUsers(prev => prev.filter(u => u.id !== user.id));
+    } catch (err) {
+      setError(err.message || 'Could not delete this user');
+    }
+    setBusyId(null);
+  }
+
   if (!users) {
     return <div style={{ textAlign: 'center', color: T.textMuted, padding: 40, fontSize: 14 }}>Loading…</div>;
   }
@@ -40,8 +53,8 @@ export default function AdminUsers({ onImpersonate }) {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {users.map(user => (
-            <div key={user.id} style={{ background: T.surface, borderRadius: 12, border: `1px solid ${T.border}`, padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
+            <div key={user.id} style={{ background: T.surface, borderRadius: 12, border: `1px solid ${T.border}`, padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: 140 }}>
                 <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{user.name}</div>
                 <div style={{ fontSize: 11.5, color: T.textMuted, marginTop: 1 }}>
                   {user.phone} · Apt {user.apartment} · {ROLE_LABEL[user.role] || user.role}
@@ -58,7 +71,18 @@ export default function AdminUsers({ onImpersonate }) {
                   flexShrink: 0,
                 }}
               >
-                {busyId === user.id ? 'Switching…' : 'Impersonate'}
+                {busyId === user.id ? 'Working…' : 'Impersonate'}
+              </button>
+              <button
+                onClick={() => handleDelete(user)}
+                disabled={busyId === user.id}
+                style={{
+                  padding: '6px 12px', borderRadius: 8, cursor: 'pointer',
+                  border: '1.5px solid #fecaca', background: 'transparent', color: T.red,
+                  fontFamily: 'inherit', fontSize: 12, fontWeight: 600, flexShrink: 0,
+                }}
+              >
+                Delete
               </button>
             </div>
           ))}

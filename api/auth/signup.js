@@ -14,8 +14,8 @@ async function handler(req, res) {
   if (!['customer', 'kitchen'].includes(role))
     return res.status(400).json({ error: 'Invalid role' });
 
-  if (process.env.ADMIN_FLAT && apartment.trim() === process.env.ADMIN_FLAT)
-    return res.status(409).json({ error: 'An account with this flat number already exists' });
+  if (process.env.ADMIN_APARTMENT && apartment.trim() === process.env.ADMIN_APARTMENT)
+    return res.status(409).json({ error: 'An account with this apartment number already exists' });
 
   const sql = neon(process.env.DATABASE_URL);
   await sql`CREATE TABLE IF NOT EXISTS users (id BIGINT PRIMARY KEY, data JSONB NOT NULL)`;
@@ -24,7 +24,7 @@ async function handler(req, res) {
   const existingUser = existing[0]?.data;
   if (existingUser && !replacingExisting) {
     return res.status(409).json({
-      error: 'An account with this flat number already exists.',
+      error: 'An account with this apartment number already exists.',
       apartmentTaken: true,
     });
   }
@@ -40,7 +40,7 @@ async function handler(req, res) {
     role,
     status: 'pending',
     code,
-    // Set only when replacing whoever currently holds this flat — the old
+    // Set only when replacing whoever currently holds this apartment — the old
     // account is deleted when this signup is approved, not before.
     replacesUserId: existingUser ? existingUser.id : undefined,
     createdAt: new Date().toISOString(),

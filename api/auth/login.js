@@ -6,13 +6,13 @@ import { log } from '../_log.js';
 async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
   const { apartment, pin } = req.body || {};
-  if (!apartment || !pin) return res.status(400).json({ error: 'Flat number and PIN are required' });
+  if (!apartment || !pin) return res.status(400).json({ error: 'Apartment number and PIN are required' });
 
   // The bootstrap admin isn't a resident, so it keeps its own env-configured
-  // identifier (ADMIN_FLAT) rather than a real flat number.
-  const adminFlat = process.env.ADMIN_FLAT;
+  // identifier (ADMIN_APARTMENT) rather than a real apartment number.
+  const adminApartment = process.env.ADMIN_APARTMENT;
   const adminPin = process.env.ADMIN_PIN;
-  if (adminFlat && adminPin && apartment === adminFlat && pin === adminPin) {
+  if (adminApartment && adminPin && apartment === adminApartment && pin === adminPin) {
     const user = { userId: 'admin', role: 'admin', name: 'Admin' };
     log('admin_login', {});
     return res.json({ token: createToken(user), user });
@@ -25,7 +25,7 @@ async function handler(req, res) {
 
   if (!record || !verifyPin(apartment, pin, record.pinHash)) {
     log('login_failed', { apartment, reason: !record ? 'no_account' : 'bad_pin' });
-    return res.status(401).json({ error: 'Invalid flat number or PIN' });
+    return res.status(401).json({ error: 'Invalid apartment number or PIN' });
   }
   if (record.status !== 'approved') {
     log('login_blocked', { apartment, status: record.status });

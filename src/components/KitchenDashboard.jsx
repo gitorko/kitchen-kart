@@ -6,7 +6,7 @@ import KitchenReports from './KitchenReports.jsx';
 import { formatCurrency, formatDateTime } from '../lib/format.js';
 import { WEEKDAYS, describeAvailability } from '../lib/availability.js';
 
-function KitchenForm({ initial, onSave, onCancel }) {
+function KitchenForm({ initial, onSave, onSaved, onCancel }) {
   const [name, setName] = useState(initial?.name || '');
   const [upiId, setUpiId] = useState(initial?.upiId || '');
   const [description, setDescription] = useState(initial?.description || '');
@@ -23,6 +23,7 @@ function KitchenForm({ initial, onSave, onCancel }) {
     setSaving(true);
     try {
       await onSave({ ...(initial || {}), name: name.trim(), upiId: upiId.trim(), description: description.trim(), photo });
+      onSaved?.();
     } catch (err) {
       setError(err.message || 'Failed to save');
     }
@@ -415,7 +416,7 @@ export default function KitchenDashboard({ kitchen, dishes, orders, onSaveKitche
 
       {tab === 'settings' && (
         <div style={{ background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, padding: 18 }}>
-          <KitchenForm initial={kitchen} onSave={onSaveKitchen} onCancel={() => setTab('dishes')} />
+          <KitchenForm initial={kitchen} onSave={onSaveKitchen} onSaved={() => setTab('dishes')} onCancel={() => setTab('dishes')} />
         </div>
       )}
 

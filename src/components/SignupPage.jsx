@@ -134,7 +134,7 @@ export default function SignupPage({ onGoLogin, onBack }) {
           {apartmentTaken && (
             <div style={{ background: T.amberBg, border: `1.5px solid ${T.amber}`, borderRadius: 10, padding: '12px 14px' }}>
               <div style={{ fontSize: 13, color: T.amber, fontWeight: 700, marginBottom: 4 }}>
-                Flat {apartment} already has an account
+                Apartment {apartment} already has an account
               </div>
               <div style={{ fontSize: 12.5, color: T.textSub }}>
                 Are you a new owner or tenant who just moved in? Continuing will replace the previous resident's account once an admin approves you.
