@@ -1,8 +1,11 @@
 import { T } from '../theme.js';
-import { formatCurrency, formatDate, formatTime12h, buildWhatsAppShareLink } from '../lib/format.js';
+import { formatCurrency, buildWhatsAppShareLink } from '../lib/format.js';
+import { isScheduledToday, describeAvailability } from '../lib/availability.js';
 
 export default function DishCard({ dish, kitchenName, qty, hearted, onAdd, onIncrement, onDecrement, onOpenPhoto, onToggleHeart }) {
   const outOfStock = !dish.inStock;
+  const notScheduledToday = dish.inStock && !isScheduledToday(dish);
+  const schedule = describeAvailability(dish);
   const heartCount = dish.heartedBy?.length || 0;
   const shareLink = `${window.location.origin}/?dish=${dish.id}`;
   const shareText = `${dish.name}${kitchenName ? ` from ${kitchenName}` : ''} on Kitchen Kart — ${formatCurrency(dish.price)}\n${shareLink}`;
@@ -11,7 +14,7 @@ export default function DishCard({ dish, kitchenName, qty, hearted, onAdd, onInc
     <div style={{
       background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`,
       overflow: 'hidden', display: 'flex', flexDirection: 'column',
-      opacity: outOfStock ? 0.72 : 1,
+      opacity: outOfStock ? 0.72 : notScheduledToday ? 0.85 : 1,
     }}>
       <div
         onClick={() => dish.photo && onOpenPhoto?.(dish.photo)}
@@ -75,9 +78,9 @@ export default function DishCard({ dish, kitchenName, qty, hearted, onAdd, onInc
         {dish.description && (
           <div style={{ fontSize: 12, color: T.textMuted, lineHeight: 1.4 }}>{dish.description}</div>
         )}
-        {(dish.availableDate || dish.availableTime) && (
+        {schedule && (
           <div style={{ fontSize: 11.5, color: T.primaryDark, background: T.primaryBg, borderRadius: 8, padding: '3px 8px', width: 'fit-content' }}>
-            {dish.availableDate ? formatDate(dish.availableDate) : ''}{dish.availableDate && dish.availableTime ? ' · ' : ''}{formatTime12h(dish.availableTime)}
+            {schedule}
           </div>
         )}
 
@@ -86,6 +89,8 @@ export default function DishCard({ dish, kitchenName, qty, hearted, onAdd, onInc
 
           {outOfStock ? (
             <span style={{ fontSize: 12, color: T.textMuted, fontWeight: 600 }}>Unavailable</span>
+          ) : notScheduledToday ? (
+            <span style={{ fontSize: 12, color: T.textMuted, fontWeight: 600 }}>Not available today</span>
           ) : qty > 0 ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: T.primaryBg, borderRadius: 20, padding: '2px 4px' }}>
               <button onClick={onDecrement} style={stepperBtn}>−</button>

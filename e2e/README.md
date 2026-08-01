@@ -22,4 +22,4 @@ node e2e/flow.mjs          # signup, approval, kitchen setup, dishes, cart, chec
 node e2e/photo-upload.mjs  # photo upload + crop modal
 ```
 
-Reads `ADMIN_PHONE` / `ADMIN_PIN` from `.env.local` for the bootstrap admin login. Uses random phone numbers each run.
+Reads `ADMIN_FLAT` / `ADMIN_PIN` from `.env.local` for the bootstrap admin login. Uses random flat numbers and phone numbers each run.

@@ -5,28 +5,30 @@ import { log } from '../_log.js';
 
 async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
-  const { phone, pin } = req.body || {};
-  if (!phone || !pin) return res.status(400).json({ error: 'Phone and PIN are required' });
+  const { apartment, pin } = req.body || {};
+  if (!apartment || !pin) return res.status(400).json({ error: 'Flat number and PIN are required' });
 
-  const adminPhone = process.env.ADMIN_PHONE;
+  // The bootstrap admin isn't a resident, so it keeps its own env-configured
+  // identifier (ADMIN_FLAT) rather than a real flat number.
+  const adminFlat = process.env.ADMIN_FLAT;
   const adminPin = process.env.ADMIN_PIN;
-  if (adminPhone && adminPin && phone === adminPhone && pin === adminPin) {
-    const user = { userId: 'admin', phone, role: 'admin', name: 'Admin' };
-    log('admin_login', { phone });
+  if (adminFlat && adminPin && apartment === adminFlat && pin === adminPin) {
+    const user = { userId: 'admin', role: 'admin', name: 'Admin' };
+    log('admin_login', {});
     return res.json({ token: createToken(user), user });
   }
 
   const sql = neon(process.env.DATABASE_URL);
   await sql`CREATE TABLE IF NOT EXISTS users (id BIGINT PRIMARY KEY, data JSONB NOT NULL)`;
-  const rows = await sql`SELECT data FROM users WHERE data->>'phone' = ${phone}`;
+  const rows = await sql`SELECT data FROM users WHERE data->>'apartment' = ${apartment}`;
   const record = rows[0]?.data;
 
-  if (!record || !verifyPin(phone, pin, record.pinHash)) {
-    log('login_failed', { phone, reason: !record ? 'no_account' : 'bad_pin' });
-    return res.status(401).json({ error: 'Invalid phone number or PIN' });
+  if (!record || !verifyPin(apartment, pin, record.pinHash)) {
+    log('login_failed', { apartment, reason: !record ? 'no_account' : 'bad_pin' });
+    return res.status(401).json({ error: 'Invalid flat number or PIN' });
   }
   if (record.status !== 'approved') {
-    log('login_blocked', { phone, status: record.status });
+    log('login_blocked', { apartment, status: record.status });
     return res.status(403).json({
       error: record.status === 'rejected'
         ? 'Your signup was rejected. Contact admin.'
@@ -37,7 +39,7 @@ async function handler(req, res) {
   }
 
   const user = { userId: record.id, phone: record.phone, role: record.role, name: record.name, apartment: record.apartment };
-  log('login_success', { phone, role: record.role });
+  log('login_success', { apartment, role: record.role });
   return res.json({ token: createToken(user), user });
 }
 

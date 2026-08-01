@@ -22,7 +22,7 @@ async function handler(req, res) {
     const existing = await sql`SELECT id FROM kitchens WHERE data->>'ownerUserId' = ${requester.userId}`;
     if (existing.length > 0) return res.status(409).json({ error: 'You already have a kitchen' });
 
-    const item = { ...req.body, ownerUserId: requester.userId };
+    const item = { ...req.body, ownerUserId: requester.userId, phone: requester.phone };
     await sql`INSERT INTO kitchens (id, data) VALUES (${item.id}, ${JSON.stringify(item)})`;
     log('kitchen_created', { kitchenId: item.id, name: item.name, by: requester.phone });
     return res.status(201).json(item);

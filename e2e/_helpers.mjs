@@ -25,6 +25,11 @@ export function randomPhone() {
   return Math.floor(6000000000 + Math.random() * 2999999999).toString();
 }
 
+// Flat number is the login identifier now, so it has to be unique per run.
+export function randomFlat(prefix) {
+  return `${prefix}-${Math.floor(100 + Math.random() * 899)}`;
+}
+
 export function shooter(page, name) {
   const dir = path.join(ROOT, 'screenshots', name);
   fs.rmSync(dir, { recursive: true, force: true });

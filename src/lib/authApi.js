@@ -18,39 +18,48 @@ const USERS_KEY = 'kk_users';
 const APPROVALS_KEY = 'kk_approvals';
 
 function adminCreds() {
-  return { phone: import.meta.env.ADMIN_PHONE, pin: import.meta.env.ADMIN_PIN };
+  return { flat: import.meta.env.ADMIN_FLAT, pin: import.meta.env.ADMIN_PIN };
 }
 
-export async function signup({ name, phone, apartment, pin, role }) {
+export async function signup({ name, phone, apartment, pin, role, replacingExisting }) {
   if (IS_DEV) {
     const users = lsGet(USERS_KEY, []);
-    const { phone: adminPhone } = adminCreds();
-    if (phone === adminPhone || users.some(u => u.phone === phone))
-      throw new Error('An account with this phone number already exists');
+    const { flat: adminFlat } = adminCreds();
+    if (apartment === adminFlat) throw new Error('An account with this flat number already exists');
+    const existingUser = users.find(u => u.apartment === apartment);
+    if (existingUser && !replacingExisting) {
+      const err = new Error('An account with this flat number already exists.');
+      err.apartmentTaken = true;
+      throw err;
+    }
     const id = Date.now();
     const code = generateCode();
-    users.push({ id, name, phone, apartment, pin, role, status: 'pending', code, createdAt: new Date().toISOString() });
+    users.push({
+      id, name, phone, apartment, pin, role, status: 'pending', code,
+      replacesUserId: existingUser ? existingUser.id : undefined,
+      createdAt: new Date().toISOString(),
+    });
     lsSet(USERS_KEY, users);
     return { code, userId: id };
   }
   const res = await fetch('/api/auth/signup', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, phone, apartment, pin, role }),
+    body: JSON.stringify({ name, phone, apartment, pin, role, replacingExisting }),
   });
   return parseJson(res);
 }
 
-export async function login({ phone, pin }) {
+export async function login({ apartment, pin }) {
   if (IS_DEV) {
     const admin = adminCreds();
-    if (admin.phone && admin.pin && phone === admin.phone && pin === admin.pin) {
-      const session = { token: 'dev', userId: 'admin', phone, role: 'admin', name: 'Admin' };
+    if (admin.flat && admin.pin && apartment === admin.flat && pin === admin.pin) {
+      const session = { token: 'dev', userId: 'admin', role: 'admin', name: 'Admin' };
       setSession(session);
       return session;
     }
     const users = lsGet(USERS_KEY, []);
-    const user = users.find(u => u.phone === phone);
-    if (!user || user.pin !== pin) throw new Error('Invalid phone number or PIN');
+    const user = users.find(u => u.apartment === apartment);
+    if (!user || user.pin !== pin) throw new Error('Invalid flat number or PIN');
     if (user.status !== 'approved') {
       const err = new Error(
         user.status === 'rejected'
@@ -66,7 +75,7 @@ export async function login({ phone, pin }) {
   }
   const res = await fetch('/api/auth/login', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ phone, pin }),
+    body: JSON.stringify({ apartment, pin }),
   });
   const data = await parseJson(res);
   const session = { token: data.token, ...data.user };
@@ -76,29 +85,72 @@ export async function login({ phone, pin }) {
 
 export function logout() { clearSession(); }
 
+// Forgot-PIN flow: stages a new PIN and issues a code to share with an
+// admin/kitchen for approval — the old PIN keeps working until then.
+export async function requestPinReset({ apartment, newPin }) {
+  if (IS_DEV) {
+    const users = lsGet(USERS_KEY, []);
+    const user = users.find(u => u.apartment === apartment);
+    if (!user || user.status !== 'approved') throw new Error('No approved account found for that flat number');
+    const code = generateCode();
+    user.pinResetRequest = { newPin, code, requestedAt: new Date().toISOString() };
+    lsSet(USERS_KEY, users);
+    return { code };
+  }
+  const res = await fetch('/api/auth/reset-pin', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ apartment, newPin }),
+  });
+  return parseJson(res);
+}
+
 export async function fetchApprovals() {
   if (IS_DEV) {
     const users = lsGet(USERS_KEY, []);
     return {
       pending: users.filter(u => u.status === 'pending').map(({ pin, ...rest }) => rest),
+      pinResets: users.filter(u => u.pinResetRequest).map(u => ({
+        id: u.id, name: u.name, phone: u.phone, apartment: u.apartment, role: u.role,
+        code: u.pinResetRequest.code, requestedAt: u.pinResetRequest.requestedAt,
+      })),
       history: lsGet(APPROVALS_KEY, []),
     };
   }
   return parseJson(await authFetch('/api/approvals'));
 }
 
-export async function submitApproval({ userId, action }) {
+export async function submitApproval({ userId, action, reason, type }) {
   const session = getSession();
   if (IS_DEV) {
     const users = lsGet(USERS_KEY, []);
     const user = users.find(u => u.id === userId);
     if (!user) throw new Error('User not found');
+
+    if (type === 'pin_reset') {
+      if (!user.pinResetRequest) throw new Error('No pending PIN reset for this user');
+      if (action === 'approve') user.pin = user.pinResetRequest.newPin;
+      delete user.pinResetRequest;
+      lsSet(USERS_KEY, users);
+      const log = {
+        id: Date.now(), userId, userName: user.name, userPhone: user.phone,
+        approvedByUserId: session.userId, approvedByName: session.name,
+        action, type: 'pin_reset', reason: action === 'reject' ? (reason || '') : undefined,
+        createdAt: new Date().toISOString(),
+      };
+      const history = lsGet(APPROVALS_KEY, []);
+      history.unshift(log);
+      lsSet(APPROVALS_KEY, history);
+      return log;
+    }
+
     user.status = action === 'approve' ? 'approved' : 'rejected';
+    if (action === 'reject' && reason) user.rejectionReason = reason;
     lsSet(USERS_KEY, users);
     const log = {
       id: Date.now(), userId, userName: user.name, userPhone: user.phone,
       approvedByUserId: session.userId, approvedByName: session.name,
-      action, code: user.code, createdAt: new Date().toISOString(),
+      action, reason: action === 'reject' ? (reason || '') : undefined,
+      code: user.code, createdAt: new Date().toISOString(),
     };
     const history = lsGet(APPROVALS_KEY, []);
     history.unshift(log);
@@ -107,7 +159,7 @@ export async function submitApproval({ userId, action }) {
   }
   const res = await authFetch('/api/approvals', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId, action }),
+    body: JSON.stringify({ userId, action, reason, type }),
   });
   return parseJson(res);
 }

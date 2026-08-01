@@ -6,15 +6,15 @@
 // Usage: node e2e/flow.mjs
 
 import { chromium } from 'playwright';
-import { BASE_URL, loadEnvLocal, randomPhone, shooter, assertServerUp, trackConsoleErrors } from './_helpers.mjs';
+import { BASE_URL, loadEnvLocal, randomPhone, randomFlat, shooter, assertServerUp, trackConsoleErrors } from './_helpers.mjs';
 
 await assertServerUp();
 
 const env = loadEnvLocal();
-const ADMIN_PHONE = env.ADMIN_PHONE;
+const ADMIN_FLAT = env.ADMIN_FLAT;
 const ADMIN_PIN = env.ADMIN_PIN;
-if (!ADMIN_PHONE || !ADMIN_PIN) {
-  throw new Error('ADMIN_PHONE / ADMIN_PIN not found in .env.local — needed to sign in as the bootstrap admin.');
+if (!ADMIN_FLAT || !ADMIN_PIN) {
+  throw new Error('ADMIN_FLAT / ADMIN_PIN not found in .env.local — needed to sign in as the bootstrap admin.');
 }
 
 const browser = await chromium.launch({ args: ['--no-sandbox'] });
@@ -24,7 +24,9 @@ const shot = shooter(page, 'flow');
 const errors = trackConsoleErrors(page);
 
 const kitchenPhone = randomPhone();
+const kitchenFlat = randomFlat('B');
 const customerPhone = randomPhone();
+const customerFlat = randomFlat('C');
 
 async function signOutThenSignIn() {
   await page.getByRole('button', { name: /▾/ }).click(); // open the user menu
@@ -33,9 +35,9 @@ async function signOutThenSignIn() {
   await page.getByRole('button', { name: 'Sign In' }).click();
 }
 
-async function login(phone, pin) {
-  await page.waitForSelector('text=Phone Number');
-  await page.locator('input[placeholder="10-digit mobile number"]').fill(phone);
+async function login(flat, pin) {
+  await page.waitForSelector('text=Flat Number');
+  await page.locator('input[placeholder="e.g. B-204"]').first().fill(flat);
   await page.locator('input[placeholder="••••"]').first().fill(pin);
   await page.getByRole('button', { name: 'Sign In' }).click();
 }
@@ -54,7 +56,7 @@ try {
   await page.getByText('Cook & sell').click();
   await page.locator('input[placeholder="Your full name"]').fill('Anjali Kitchen Owner');
   await page.locator('input[placeholder="10-digit mobile number"]').fill(kitchenPhone);
-  await page.locator('input[placeholder="e.g. B-204"]').fill('B-204');
+  await page.locator('input[placeholder="e.g. B-204"]').fill(kitchenFlat);
   const pinInputs = page.locator('input[type="password"]');
   await pinInputs.nth(0).fill('1112');
   await pinInputs.nth(1).fill('1112');
@@ -66,7 +68,7 @@ try {
   await page.getByText('← Back to sign in').click();
 
   // 2. Log in as bootstrap admin, approve kitchen
-  await login(ADMIN_PHONE, ADMIN_PIN);
+  await login(ADMIN_FLAT, ADMIN_PIN);
   await page.waitForSelector('text=Approvals');
   await page.getByRole('button', { name: /Approvals/ }).click();
   await page.waitForSelector('text=Pending Approvals');
@@ -78,7 +80,7 @@ try {
   await signOutThenSignIn();
 
   // 3. Log in as kitchen, set up kitchen + add dishes
-  await login(kitchenPhone, '1112');
+  await login(kitchenFlat, '1112');
   await page.waitForSelector('text=My Kitchen');
   await page.getByRole('button', { name: /My Kitchen/ }).click();
   await page.waitForSelector('text=Set up your kitchen');
@@ -118,7 +120,7 @@ try {
   await page.waitForSelector('text=Create your account');
   await page.locator('input[placeholder="Your full name"]').fill('Ravi Customer');
   await page.locator('input[placeholder="10-digit mobile number"]').fill(customerPhone);
-  await page.locator('input[placeholder="e.g. B-204"]').fill('C-101');
+  await page.locator('input[placeholder="e.g. B-204"]').fill(customerFlat);
   const pinInputs2 = page.locator('input[type="password"]');
   await pinInputs2.nth(0).fill('2223');
   await pinInputs2.nth(1).fill('2223');
@@ -128,7 +130,7 @@ try {
   await page.getByText('← Back to sign in').click();
 
   // 5. Log back in as kitchen, approve customer (kitchens act as low-level admins)
-  await login(kitchenPhone, '1112');
+  await login(kitchenFlat, '1112');
   await page.waitForSelector('text=Approvals');
   await page.getByRole('button', { name: /Approvals/ }).click();
   await page.waitForSelector('text=Ravi Customer');
@@ -139,7 +141,7 @@ try {
   await signOutThenSignIn();
 
   // 6. Log in as customer, browse
-  await login(customerPhone, '2223');
+  await login(customerFlat, '2223');
   await page.waitForSelector('text=All Dishes');
   await shot('10-customer-home-all-dishes');
 
@@ -191,7 +193,7 @@ try {
   await signOutThenSignIn();
 
   // 7. Kitchen accepts + delivers
-  await login(kitchenPhone, '1112');
+  await login(kitchenFlat, '1112');
   await page.waitForSelector('text=My Kitchen');
   await page.getByRole('button', { name: /My Kitchen/ }).click();
   await page.waitForTimeout(300);
@@ -201,13 +203,15 @@ try {
   await page.getByRole('button', { name: 'Accept' }).click();
   await page.waitForTimeout(400);
   await shot('20-order-accepted');
+  await page.getByRole('button', { name: /^Preparing/ }).click();
+  await page.waitForSelector('text=Ravi Customer');
   await page.getByRole('button', { name: 'Mark Delivered' }).click();
   await page.waitForTimeout(400);
   await shot('21-order-delivered');
   await signOutThenSignIn();
 
   // 8. Customer pays via UPI
-  await login(customerPhone, '2223');
+  await login(customerFlat, '2223');
   await page.waitForSelector('text=My Orders');
   await page.getByRole('button', { name: /My Orders/ }).click();
   await page.waitForSelector('text=💳 Pay via UPI');

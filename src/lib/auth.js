@@ -70,6 +70,7 @@ export async function parseJson(res) {
     const err = new Error(data?.error || 'Something went wrong. Please try again.');
     if (data?.status) err.status = data.status;
     if (data?.code) err.code = data.code;
+    if (data?.apartmentTaken) err.apartmentTaken = true;
     throw err;
   }
   return data;

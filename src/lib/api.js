@@ -62,3 +62,19 @@ export async function toggleDishHeart(dish, heart) {
   });
   return parseJson(res);
 }
+
+// Toggle a favorite on a kitchen for the current user — favorited kitchens are
+// pinned to the top of "Browse by Kitchen". Same shape as toggleDishHeart.
+export async function toggleKitchenFavorite(kitchen, favorite) {
+  if (IS_DEV) {
+    const session = getSession();
+    const favoritedBy = new Set(kitchen.favoritedBy || []);
+    if (favorite) favoritedBy.add(session?.userId); else favoritedBy.delete(session?.userId);
+    return kitchensApi.update({ id: kitchen.id, favoritedBy: [...favoritedBy] });
+  }
+  const res = await authFetch(`/api/kitchens/${kitchen.id}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ favorite }),
+  });
+  return parseJson(res);
+}

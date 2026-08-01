@@ -2,14 +2,16 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { T } from './theme.js';
 import { getSession, isImpersonating, stopImpersonation } from './lib/auth.js';
 import { logout, fetchApprovals, submitApproval, impersonateUser } from './lib/authApi.js';
-import { kitchensApi, dishesApi, ordersApi, toggleDishHeart } from './lib/api.js';
+import { kitchensApi, dishesApi, ordersApi, toggleDishHeart, toggleKitchenFavorite } from './lib/api.js';
 import LoginPage from './components/LoginPage.jsx';
 import SignupPage from './components/SignupPage.jsx';
+import ForgotPinPage from './components/ForgotPinPage.jsx';
 import HomePage from './components/HomePage.jsx';
 import OrdersPage from './components/OrdersPage.jsx';
 import KitchenDashboard from './components/KitchenDashboard.jsx';
 import AdminApprovals from './components/AdminApprovals.jsx';
 import AdminUsers from './components/AdminUsers.jsx';
+import AdminKitchens from './components/AdminKitchens.jsx';
 import CartDrawer from './components/CartDrawer.jsx';
 import UserMenu from './components/UserMenu.jsx';
 
@@ -26,12 +28,23 @@ function loadCart() {
 
 export default function App() {
   const [session, setSession] = useState(() => getSession());
-  const [authView, setAuthView] = useState(null); // null | 'login' | 'signup'
+  const [authView, setAuthView] = useState(null); // null | 'login' | 'signup' | 'forgot-pin'
 
-  if (authView) {
-    return authView === 'login'
-      ? <LoginPage onLogin={s => { setSession(s); setAuthView(null); }} onGoSignup={() => setAuthView('signup')} onBack={() => setAuthView(null)} />
-      : <SignupPage onGoLogin={() => setAuthView('login')} onBack={() => setAuthView(null)} />;
+  if (authView === 'login') {
+    return (
+      <LoginPage
+        onLogin={s => { setSession(s); setAuthView(null); }}
+        onGoSignup={() => setAuthView('signup')}
+        onGoForgotPin={() => setAuthView('forgot-pin')}
+        onBack={() => setAuthView(null)}
+      />
+    );
+  }
+  if (authView === 'signup') {
+    return <SignupPage onGoLogin={() => setAuthView('login')} onBack={() => setAuthView(null)} />;
+  }
+  if (authView === 'forgot-pin') {
+    return <ForgotPinPage onGoLogin={() => setAuthView('login')} />;
   }
 
   return (
@@ -50,7 +63,7 @@ function AppShell({ session, onRequireAuth, onLogout }) {
   const [kitchens, setKitchens] = useState([]);
   const [dishes, setDishes] = useState([]);
   const [orders, setOrders] = useState([]);
-  const [approvals, setApprovals] = useState({ pending: [], history: [] });
+  const [approvals, setApprovals] = useState({ pending: [], pinResets: [], history: [] });
   const [loading, setLoading] = useState(true);
   const [cart, setCart] = useState(loadCart);
   const [cartOpen, setCartOpen] = useState(false);
@@ -79,7 +92,7 @@ function AppShell({ session, onRequireAuth, onLogout }) {
       kitchensApi.getAll(),
       dishesApi.getAll(),
       session ? ordersApi.getAll() : Promise.resolve([]),
-      session && canApprove ? fetchApprovals() : Promise.resolve({ pending: [], history: [] }),
+      session && canApprove ? fetchApprovals() : Promise.resolve({ pending: [], pinResets: [], history: [] }),
     ]).then(([k, d, o, a]) => {
       setKitchens(k);
       setDishes(d);
@@ -141,6 +154,8 @@ function AppShell({ session, onRequireAuth, onLogout }) {
     if (!session) { onRequireAuth(); return; }
     const kc = cart[kitchenId];
     if (!kc || kc.items.length === 0) return;
+    const kitchen = kitchens.find(k => k.id === kitchenId);
+    if (kitchen?.onVacation) throw new Error(`${kitchen.name} is on vacation and not taking orders right now.`);
     const totalAmount = kc.items.reduce((sum, i) => sum + i.price * i.qty, 0);
     const order = {
       id: Date.now(),
@@ -175,13 +190,20 @@ function AppShell({ session, onRequireAuth, onLogout }) {
     setDishes(prev => prev.map(d => (d.id === dish.id ? updated : d)));
   }
 
+  async function toggleFavorite(kitchen) {
+    if (!session) return;
+    const favorited = (kitchen.favoritedBy || []).includes(session.userId);
+    const updated = await toggleKitchenFavorite(kitchen, !favorited);
+    setKitchens(prev => prev.map(k => (k.id === updated.id ? updated : k)));
+  }
+
   // ── Kitchen dashboard ──
   async function saveKitchen(data) {
     if (data.id) {
       const updated = await kitchensApi.update(data);
       setKitchens(prev => prev.map(k => (k.id === updated.id ? updated : k)));
     } else {
-      const created = await kitchensApi.create({ ...data, id: Date.now(), ownerUserId: session.userId, createdAt: new Date().toISOString() });
+      const created = await kitchensApi.create({ ...data, id: Date.now(), ownerUserId: session.userId, phone: session.phone, createdAt: new Date().toISOString() });
       setKitchens(prev => [created, ...prev]);
     }
   }
@@ -206,6 +228,26 @@ function AppShell({ session, onRequireAuth, onLogout }) {
     setDishes(prev => prev.map(d => (d.id === updated.id ? updated : d)));
   }
 
+  async function toggleVisible(dish) {
+    const updated = await dishesApi.update({ id: dish.id, visible: dish.visible === false });
+    setDishes(prev => prev.map(d => (d.id === updated.id ? updated : d)));
+  }
+
+  async function toggleVacation(kitchen) {
+    const updated = await kitchensApi.update({ id: kitchen.id, onVacation: !kitchen.onVacation });
+    setKitchens(prev => prev.map(k => (k.id === updated.id ? updated : k)));
+  }
+
+  // ── Admin: delete a kitchen (and its dishes — the server cascades this too,
+  // but dev mode has no server, so the client cleans up its own dish records) ──
+  async function deleteKitchen(kitchenId) {
+    const dishIds = dishes.filter(d => d.kitchenId === kitchenId).map(d => d.id);
+    await Promise.all(dishIds.map(id => dishesApi.remove(id)));
+    await kitchensApi.remove(kitchenId);
+    setKitchens(prev => prev.filter(k => k.id !== kitchenId));
+    setDishes(prev => prev.filter(d => d.kitchenId !== kitchenId));
+  }
+
   async function updateOrder(orderId, patch) {
     const updated = await ordersApi.update({ id: orderId, ...patch });
     setOrders(prev => prev.map(o => (o.id === updated.id ? updated : o)));
@@ -221,10 +263,18 @@ function AppShell({ session, onRequireAuth, onLogout }) {
     setApprovals(await fetchApprovals());
     setHighlightCode(null);
   }
-  async function rejectUser(userId) {
-    await submitApproval({ userId, action: 'reject' });
+  async function rejectUser(userId, reason) {
+    await submitApproval({ userId, action: 'reject', reason });
     setApprovals(await fetchApprovals());
     setHighlightCode(null);
+  }
+  async function approvePinReset(userId) {
+    await submitApproval({ userId, action: 'approve', type: 'pin_reset' });
+    setApprovals(await fetchApprovals());
+  }
+  async function rejectPinReset(userId, reason) {
+    await submitApproval({ userId, action: 'reject', reason, type: 'pin_reset' });
+    setApprovals(await fetchApprovals());
   }
 
   // ── Admin: impersonate a user ──
@@ -243,6 +293,7 @@ function AppShell({ session, onRequireAuth, onLogout }) {
     session?.role === 'kitchen' && { key: 'kitchen', label: '👩‍🍳 My Kitchen' },
     session && canApprove && { key: 'approvals', label: `✅ Approvals${approvals.pending.length ? ` (${approvals.pending.length})` : ''}` },
     session?.role === 'admin' && { key: 'users', label: '👥 Users' },
+    session?.role === 'admin' && { key: 'kitchens', label: '🏠 Kitchens' },
   ].filter(Boolean);
 
   return (
@@ -263,17 +314,29 @@ function AppShell({ session, onRequireAuth, onLogout }) {
       )}
       <div style={{ maxWidth: 720, margin: '0 auto', padding: '0 16px 90px' }}>
 
-        <div style={{ padding: '14px 0', position: 'sticky', top: 0, background: T.bg, zIndex: 20, borderBottom: `1px solid ${T.border}`, marginBottom: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 2, rowGap: 8, flexWrap: 'wrap' }}>
-            <h1 style={{ fontSize: 18, fontWeight: 800, color: T.text, letterSpacing: -0.3, whiteSpace: 'nowrap', marginRight: 'auto', paddingRight: 10 }}>
+        <div style={{ padding: '14px 0 10px', position: 'sticky', top: 0, background: T.bg, zIndex: 20, borderBottom: `1px solid ${T.border}`, marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10 }}>
+            <h1 style={{ fontSize: 18, fontWeight: 800, color: T.text, letterSpacing: -0.3, whiteSpace: 'nowrap' }}>
               🍲 Kitchen Kart
             </h1>
+            {session ? (
+              <UserMenu name={session.name} onLogout={onLogout} />
+            ) : (
+              <button
+                onClick={onRequireAuth}
+                style={{ background: T.primary, color: '#fff', border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', flexShrink: 0 }}
+              >
+                Sign In
+              </button>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: 2, overflowX: 'auto' }}>
             {TABS.map(({ key, label }) => (
               <button
                 key={key} onClick={() => setTab(key)}
                 style={{
                   background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
-                  fontSize: 12.5, fontWeight: tab === key ? 700 : 500, whiteSpace: 'nowrap',
+                  fontSize: 12.5, fontWeight: tab === key ? 700 : 500, whiteSpace: 'nowrap', flexShrink: 0,
                   color: tab === key ? T.text : T.textMuted, padding: '6px 8px',
                   borderBottom: `2px solid ${tab === key ? T.primary : 'transparent'}`,
                 }}
@@ -281,17 +344,6 @@ function AppShell({ session, onRequireAuth, onLogout }) {
                 {label}
               </button>
             ))}
-            <div style={{ width: 1, height: 18, background: T.border, margin: '0 6px' }} />
-            {session ? (
-              <UserMenu name={session.name} onLogout={onLogout} />
-            ) : (
-              <button
-                onClick={onRequireAuth}
-                style={{ background: T.primary, color: '#fff', border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
-              >
-                Sign In
-              </button>
-            )}
           </div>
         </div>
 
@@ -311,6 +363,7 @@ function AppShell({ session, onRequireAuth, onLogout }) {
             onIncrement={dish => changeQty(dish.kitchenId, dish.id, 1)}
             onDecrement={dish => changeQty(dish.kitchenId, dish.id, -1)}
             onToggleHeart={toggleHeart}
+            onToggleFavorite={toggleFavorite}
             sharedDishId={dismissShared ? null : sharedDishId}
             onClearShared={() => setDismissShared(true)}
           />
@@ -320,15 +373,19 @@ function AppShell({ session, onRequireAuth, onLogout }) {
           <KitchenDashboard
             kitchen={myKitchen} dishes={myDishes} orders={myOrders}
             onSaveKitchen={saveKitchen} onSaveDish={saveDish} onDeleteDish={deleteDish}
-            onToggleStock={toggleStock} onUpdateOrder={updateOrder}
+            onToggleStock={toggleStock} onToggleVisible={toggleVisible}
+            onUpdateOrder={updateOrder} onToggleVacation={toggleVacation}
           />
         ) : tab === 'approvals' ? (
           <AdminApprovals
-            pending={approvals.pending} history={approvals.history} highlightCode={highlightCode}
+            pending={approvals.pending} pinResets={approvals.pinResets} history={approvals.history} highlightCode={highlightCode}
             onApprove={approveUser} onReject={rejectUser}
+            onApprovePinReset={approvePinReset} onRejectPinReset={rejectPinReset}
           />
         ) : tab === 'users' ? (
           <AdminUsers onImpersonate={handleImpersonate} />
+        ) : tab === 'kitchens' ? (
+          <AdminKitchens kitchens={kitchens} dishes={dishes} onDelete={deleteKitchen} />
         ) : null}
       </div>
 
@@ -351,6 +408,7 @@ function AppShell({ session, onRequireAuth, onLogout }) {
         <CartDrawer
           cart={cart}
           session={session}
+          kitchens={kitchens}
           onIncrement={(kitchenId, dishId) => changeQty(kitchenId, dishId, 1)}
           onDecrement={(kitchenId, dishId) => changeQty(kitchenId, dishId, -1)}
           onComment={setComment}

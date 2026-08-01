@@ -9,6 +9,11 @@ export function formatDate(ymd) {
   });
 }
 
+export function isToday(iso) {
+  if (!iso) return false;
+  return iso.slice(0, 10) === new Date().toISOString().slice(0, 10);
+}
+
 export function formatDateTime(iso) {
   if (!iso) return '—';
   return new Date(iso).toLocaleString('en-IN', {

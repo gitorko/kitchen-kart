@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { T, INPUT, LABEL } from '../theme.js';
 import { login } from '../lib/authApi.js';
 
-export default function LoginPage({ onLogin, onGoSignup, onBack }) {
-  const [phone, setPhone] = useState('');
+export default function LoginPage({ onLogin, onGoSignup, onGoForgotPin, onBack }) {
+  const [apartment, setApartment] = useState('');
   const [pin, setPin] = useState('');
   const [showPin, setShowPin] = useState(false);
   const [error, setError] = useState('');
@@ -17,7 +17,7 @@ export default function LoginPage({ onLogin, onGoSignup, onBack }) {
     setPending(null);
     setLoading(true);
     try {
-      const session = await login({ phone: phone.trim(), pin: pin.trim() });
+      const session = await login({ apartment: apartment.trim(), pin: pin.trim() });
       onLogin(session);
     } catch (err) {
       if (err.status === 'pending') setPending({ code: err.code });
@@ -41,11 +41,11 @@ export default function LoginPage({ onLogin, onGoSignup, onBack }) {
         </div>
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
-            <label style={LABEL}>Phone Number</label>
+            <label style={LABEL}>Flat Number</label>
             <input
-              type="tel" inputMode="numeric" autoFocus autoComplete="tel" value={phone}
-              onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-              placeholder="10-digit mobile number"
+              autoFocus autoComplete="off" value={apartment}
+              onChange={e => setApartment(e.target.value)}
+              placeholder="e.g. B-204"
               style={INPUT}
             />
           </div>
@@ -63,6 +63,9 @@ export default function LoginPage({ onLogin, onGoSignup, onBack }) {
                 {showPin ? '🙈' : '👁️'}
               </button>
             </div>
+            <button type="button" onClick={onGoForgotPin} style={{ background: 'none', border: 'none', color: T.textSub, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, padding: '6px 0 0', display: 'block' }}>
+              Forgot PIN?
+            </button>
           </div>
           {error && (
             <div style={{ fontSize: 13, color: T.red, background: T.redBg, border: '1px solid #fecaca', borderRadius: 8, padding: '8px 12px' }}>

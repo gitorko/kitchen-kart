@@ -5,7 +5,7 @@ import { log } from '../_log.js';
 
 async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
-  const { name, phone, apartment, pin, role } = req.body || {};
+  const { name, phone, apartment, pin, role, replacingExisting } = req.body || {};
 
   if (!name?.trim() || !phone?.trim() || !apartment?.trim() || !pin?.trim())
     return res.status(400).json({ error: 'All fields are required' });
@@ -14,15 +14,20 @@ async function handler(req, res) {
   if (!['customer', 'kitchen'].includes(role))
     return res.status(400).json({ error: 'Invalid role' });
 
-  if (process.env.ADMIN_PHONE && phone.trim() === process.env.ADMIN_PHONE)
-    return res.status(409).json({ error: 'An account with this phone number already exists' });
+  if (process.env.ADMIN_FLAT && apartment.trim() === process.env.ADMIN_FLAT)
+    return res.status(409).json({ error: 'An account with this flat number already exists' });
 
   const sql = neon(process.env.DATABASE_URL);
   await sql`CREATE TABLE IF NOT EXISTS users (id BIGINT PRIMARY KEY, data JSONB NOT NULL)`;
 
-  const existing = await sql`SELECT id FROM users WHERE data->>'phone' = ${phone.trim()}`;
-  if (existing.length > 0)
-    return res.status(409).json({ error: 'An account with this phone number already exists' });
+  const existing = await sql`SELECT data FROM users WHERE data->>'apartment' = ${apartment.trim()}`;
+  const existingUser = existing[0]?.data;
+  if (existingUser && !replacingExisting) {
+    return res.status(409).json({
+      error: 'An account with this flat number already exists.',
+      apartmentTaken: true,
+    });
+  }
 
   const id = Date.now();
   const code = generateCode();
@@ -31,14 +36,17 @@ async function handler(req, res) {
     name: name.trim(),
     phone: phone.trim(),
     apartment: apartment.trim(),
-    pinHash: hashPin(phone.trim(), pin),
+    pinHash: hashPin(apartment.trim(), pin),
     role,
     status: 'pending',
     code,
+    // Set only when replacing whoever currently holds this flat — the old
+    // account is deleted when this signup is approved, not before.
+    replacesUserId: existingUser ? existingUser.id : undefined,
     createdAt: new Date().toISOString(),
   };
   await sql`INSERT INTO users (id, data) VALUES (${id}, ${JSON.stringify(user)})`;
-  log('signup', { phone: user.phone, role });
+  log('signup', { apartment: user.apartment, role, replacesUserId: user.replacesUserId });
   return res.status(201).json({ code, userId: id });
 }
 

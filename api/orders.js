@@ -28,6 +28,12 @@ async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
+    await sql`CREATE TABLE IF NOT EXISTS kitchens (id BIGINT PRIMARY KEY, data JSONB NOT NULL)`;
+    const kRows = await sql`SELECT data FROM kitchens WHERE id = ${req.body?.kitchenId}`;
+    const kitchen = kRows[0]?.data;
+    if (!kitchen) return res.status(404).json({ error: 'Kitchen not found' });
+    if (kitchen.onVacation) return res.status(400).json({ error: `${kitchen.name} is on vacation and not taking orders right now.` });
+
     const item = { ...req.body, userId: requester.userId, userName: requester.name };
     await sql`INSERT INTO orders (id, data) VALUES (${item.id}, ${JSON.stringify(item)})`;
     log('order_placed', { orderId: item.id, kitchenId: item.kitchenId, userId: requester.userId, totalAmount: item.totalAmount });

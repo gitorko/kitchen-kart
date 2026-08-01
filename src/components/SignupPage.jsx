@@ -32,6 +32,12 @@ export default function SignupPage({ onGoLogin, onBack }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null); // { code }
+  const [apartmentTaken, setApartmentTaken] = useState(false);
+
+  function handleApartmentChange(value) {
+    setApartment(value);
+    if (apartmentTaken) setApartmentTaken(false);
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -45,10 +51,14 @@ export default function SignupPage({ onGoLogin, onBack }) {
 
     setLoading(true);
     try {
-      const { code } = await signup({ name: name.trim(), phone, apartment: apartment.trim(), pin, role });
+      const { code } = await signup({
+        name: name.trim(), phone, apartment: apartment.trim(), pin, role,
+        replacingExisting: apartmentTaken,
+      });
       setResult({ code });
     } catch (err) {
-      setError(err.message || 'Signup failed');
+      if (err.apartmentTaken) setApartmentTaken(true);
+      else setError(err.message || 'Signup failed');
     }
     setLoading(false);
   }
@@ -119,8 +129,18 @@ export default function SignupPage({ onGoLogin, onBack }) {
           </div>
           <div>
             <label style={LABEL}>Apartment Number</label>
-            <input style={INPUT} value={apartment} onChange={e => setApartment(e.target.value)} placeholder="e.g. B-204" />
+            <input style={INPUT} value={apartment} onChange={e => handleApartmentChange(e.target.value)} placeholder="e.g. B-204" />
           </div>
+          {apartmentTaken && (
+            <div style={{ background: T.amberBg, border: `1.5px solid ${T.amber}`, borderRadius: 10, padding: '12px 14px' }}>
+              <div style={{ fontSize: 13, color: T.amber, fontWeight: 700, marginBottom: 4 }}>
+                Flat {apartment} already has an account
+              </div>
+              <div style={{ fontSize: 12.5, color: T.textSub }}>
+                Are you a new owner or tenant who just moved in? Continuing will replace the previous resident's account once an admin approves you.
+              </div>
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 10 }}>
             <div style={{ flex: 1 }}>
               <label style={LABEL}>4-digit PIN</label>
@@ -138,7 +158,7 @@ export default function SignupPage({ onGoLogin, onBack }) {
           )}
           <button type="submit" disabled={loading}
             style={{ background: loading ? '#fdba74' : T.primary, color: '#fff', border: 'none', borderRadius: 10, padding: '13px', fontWeight: 700, fontSize: 15, cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'inherit', marginTop: 4 }}>
-            {loading ? 'Creating account…' : 'Sign Up'}
+            {loading ? 'Creating account…' : apartmentTaken ? "Yes, I'm the new resident — continue" : 'Sign Up'}
           </button>
         </form>
         <div style={{ textAlign: 'center', marginTop: 16, fontSize: 13.5, color: T.textSub }}>

@@ -51,4 +51,5 @@ export const STATUS_COLOR = {
   delivered:{ color: T.green, bg: T.greenBg, label: 'Delivered' },
   paid:     { color: T.teal,  bg: T.tealBg,  label: 'Paid' },
   unpaid:   { color: T.red,   bg: T.redBg,   label: 'Unpaid' },
+  vacation: { color: T.amber, bg: T.amberBg, label: 'On Vacation' },
 };

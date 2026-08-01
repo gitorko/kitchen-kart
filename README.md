@@ -11,10 +11,10 @@ npm run dev
 
 Open `http://localhost:5173`. Data is saved to browser localStorage — no database needed.
 
-`.env.local` has the bootstrap admin login:
+Login is by **flat number + 4-digit PIN** (not phone — phone is captured at signup for contact purposes only). `.env.local` has the bootstrap admin login, typed into the "Flat Number" field:
 
 ```bash
-ADMIN_PHONE=9886755430
+ADMIN_FLAT=0000
 ADMIN_PIN=1234
 ```
 
@@ -26,11 +26,11 @@ Sign up as "Kitchen" or "Customer", then approve the account by logging in as ad
 2. **Storage** → attach a **Postgres (Neon)** database (`DATABASE_URL` is set automatically).
 3. **Settings → Environment Variables**:
 
-   | Variable      | Value                          |
-   | ------------- | ------------------------------ |
-   | `ADMIN_PHONE` | bootstrap admin's phone number |
-   | `ADMIN_PIN`   | bootstrap admin's 4-digit PIN  |
-   | `AUTH_SECRET` | `openssl rand -hex 32`         |
+   | Variable      | Value                                                         |
+   | ------------- | ------------------------------------------------------------- |
+   | `ADMIN_FLAT`  | bootstrap admin's login identifier (typed into "Flat Number") |
+   | `ADMIN_PIN`   | bootstrap admin's 4-digit PIN                                 |
+   | `AUTH_SECRET` | `openssl rand -hex 32`                                        |
 
 4. Deploy.
 
@@ -38,7 +38,7 @@ To change the admin PIN: update `ADMIN_PIN` in Vercel and redeploy.
 
 ## How approvals work
 
-Signup collects phone + apartment + a 4-digit PIN, and issues a CODE + shareable link. Signer shares it on WhatsApp; an admin or any approved kitchen (kitchens are low-level admins) approves from **Approvals**. Every decision is logged permanently.
+Signup collects name, phone, flat number, and a 4-digit PIN, and issues a CODE + shareable link. Signer shares it on WhatsApp; an admin or any approved kitchen (kitchens are low-level admins) approves from **Approvals**. Every decision — including a rejection reason, if given — is logged permanently.
 
 ## E2E tests
 

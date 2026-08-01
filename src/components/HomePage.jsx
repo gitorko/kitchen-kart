@@ -3,25 +3,36 @@ import { T, SECTION_LABEL } from '../theme.js';
 import DishCard from './DishCard.jsx';
 import KitchenCard from './KitchenCard.jsx';
 import PhotoLightbox from './PhotoLightbox.jsx';
+import Badge from './Badge.jsx';
 
-export default function HomePage({ kitchens, dishes, cart, session, onAdd, onIncrement, onDecrement, onToggleHeart, sharedDishId, onClearShared }) {
+export default function HomePage({ kitchens, dishes, cart, session, onAdd, onIncrement, onDecrement, onToggleHeart, onToggleFavorite, sharedDishId, onClearShared }) {
   const [mode, setMode] = useState('all'); // 'all' | 'kitchens'
   const [selectedKitchenId, setSelectedKitchenId] = useState(null);
   const [query, setQuery] = useState('');
   const [lightbox, setLightbox] = useState(null);
 
-  const sharedDish = sharedDishId ? dishes.find(d => d.id === sharedDishId) : null;
+  // "Currently Not Available" dishes are hidden from customers entirely — this
+  // is separate from "Out of Stock", which still lists the dish (DishCard
+  // shows that state itself).
+  const customerDishes = dishes.filter(d => d.visible !== false);
+  const sharedDish = sharedDishId ? customerDishes.find(d => d.id === sharedDishId) : null;
 
   const kitchenNameById = useMemo(
     () => Object.fromEntries(kitchens.map(k => [k.id, k.name])),
     [kitchens]
   );
 
+  const isHearted = dish => !!session && (dish.heartedBy || []).includes(session.userId);
+  const isFavoritedKitchen = kitchen => !!session && (kitchen.favoritedBy || []).includes(session.userId);
+
   const q = query.trim().toLowerCase();
-  const visibleDishes = dishes
+  const visibleDishes = customerDishes
     .filter(d => !selectedKitchenId || d.kitchenId === selectedKitchenId)
     .filter(d => !q || d.name.toLowerCase().includes(q) || (kitchenNameById[d.kitchenId] || '').toLowerCase().includes(q))
-    .sort((a, b) => Number(b.inStock) - Number(a.inStock));
+    // Favorited (hearted by me) dishes are pinned to the top, then in-stock ones.
+    .sort((a, b) => Number(isHearted(b)) - Number(isHearted(a)) || Number(b.inStock) - Number(a.inStock));
+
+  const sortedKitchens = [...kitchens].sort((a, b) => Number(isFavoritedKitchen(b)) - Number(isFavoritedKitchen(a)));
 
   // While searching, group by dish name so it's obvious when several kitchens
   // are making the same thing — lets you compare price/availability side by side.
@@ -107,6 +118,7 @@ export default function HomePage({ kitchens, dishes, cart, session, onAdd, onInc
             ← All Kitchens
           </button>
           <div style={{ fontWeight: 800, fontSize: 16, color: T.text }}>{selectedKitchen?.name}</div>
+          {selectedKitchen?.onVacation && <Badge status="vacation" />}
         </div>
       )}
 
@@ -115,11 +127,13 @@ export default function HomePage({ kitchens, dishes, cart, session, onAdd, onInc
           <EmptyState emoji="👩‍🍳" text="No kitchens yet" />
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12 }}>
-            {kitchens.map(k => (
+            {sortedKitchens.map(k => (
               <KitchenCard
                 key={k.id} kitchen={k}
-                dishCount={dishes.filter(d => d.kitchenId === k.id).length}
+                dishCount={customerDishes.filter(d => d.kitchenId === k.id).length}
                 onClick={() => setSelectedKitchenId(k.id)}
+                favorited={isFavoritedKitchen(k)}
+                onToggleFavorite={session ? () => onToggleFavorite(k) : null}
               />
             ))}
           </div>

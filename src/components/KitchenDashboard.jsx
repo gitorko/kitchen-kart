@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { T, INPUT, LABEL, SECTION_LABEL } from '../theme.js';
 import Badge from './Badge.jsx';
 import PhotoUploadField from './PhotoUploadField.jsx';
-import { formatCurrency, formatDateTime, formatDate, formatTime12h } from '../lib/format.js';
+import KitchenReports from './KitchenReports.jsx';
+import { formatCurrency, formatDateTime } from '../lib/format.js';
+import { WEEKDAYS, describeAvailability } from '../lib/availability.js';
 
 function KitchenForm({ initial, onSave, onCancel }) {
   const [name, setName] = useState(initial?.name || '');
@@ -57,30 +59,57 @@ function KitchenForm({ initial, onSave, onCancel }) {
   );
 }
 
+function ToggleRow({ active, activeLabel, inactiveLabel, activeColor, inactiveColor, onClick }) {
+  const color = active ? activeColor : inactiveColor;
+  return (
+    <button
+      type="button" onClick={onClick}
+      style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '11px 14px', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit',
+        border: `1.5px solid ${color}`, background: `${color}18`,
+        color, fontWeight: 700, fontSize: 13.5,
+      }}
+    >
+      <span>{active ? activeLabel : inactiveLabel}</span>
+      <span style={{ fontSize: 11, fontWeight: 600, opacity: 0.8 }}>Tap to toggle</span>
+    </button>
+  );
+}
+
 function DishFormModal({ initial, onSave, onClose }) {
   const isEdit = !!initial?.id;
   const [name, setName] = useState(initial?.name || '');
   const [description, setDescription] = useState(initial?.description || '');
   const [price, setPrice] = useState(initial?.price != null ? String(initial.price) : '');
+  const [availabilityMode, setAvailabilityMode] = useState(initial?.availabilityMode || 'spot');
   const [availableDate, setAvailableDate] = useState(initial?.availableDate || '');
   const [availableTime, setAvailableTime] = useState(initial?.availableTime || '');
+  const [availableDays, setAvailableDays] = useState(initial?.availableDays || []);
   const [inStock, setInStock] = useState(initial?.inStock ?? true);
+  const [visible, setVisible] = useState(initial?.visible ?? true);
   const [photo, setPhoto] = useState(initial?.photo || null);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+
+  function toggleDay(key) {
+    setAvailableDays(prev => (prev.includes(key) ? prev.filter(d => d !== key) : [...prev, key]));
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
     if (saving) return;
     if (!name.trim()) return setError('Dish name is required.');
     if (!price || isNaN(price) || Number(price) <= 0) return setError('Enter a valid price.');
+    if (availabilityMode === 'day' && !availableDate) return setError('Pick a date, or switch to a different availability mode.');
+    if (availabilityMode === 'weekly' && availableDays.length === 0) return setError('Pick at least one day, or switch to a different availability mode.');
     setError('');
     setSaving(true);
     try {
       await onSave({
         ...(initial || {}),
         name: name.trim(), description: description.trim(), price: Number(price),
-        availableDate, availableTime, inStock, photo,
+        availabilityMode, availableDate, availableTime, availableDays, inStock, visible, photo,
       });
     } catch (err) {
       setError(err.message || 'Failed to save');
@@ -109,29 +138,77 @@ function DishFormModal({ initial, onSave, onClose }) {
             <label style={LABEL}>Price (₹)</label>
             <input type="number" min="0" style={INPUT} value={price} onChange={e => setPrice(e.target.value)} placeholder="e.g. 150" />
           </div>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <div style={{ flex: 1 }}>
-              <label style={LABEL}>Available Date</label>
-              <input type="date" style={INPUT} value={availableDate} onChange={e => setAvailableDate(e.target.value)} />
+
+          <div>
+            <label style={LABEL}>When is this dish made?</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {[
+                { key: 'spot', label: '⚡ On the Spot' },
+                { key: 'day', label: '📅 One Day' },
+                { key: 'weekly', label: '🔁 Weekly' },
+              ].map(({ key, label }) => (
+                <button
+                  key={key} type="button" onClick={() => setAvailabilityMode(key)}
+                  style={{
+                    flex: 1, padding: '9px 4px', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit',
+                    fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap',
+                    border: availabilityMode === key ? `2px solid ${T.primary}` : `1.5px solid ${T.border}`,
+                    background: availabilityMode === key ? T.primaryBg : T.surface,
+                    color: availabilityMode === key ? T.primaryDark : T.textSub,
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
-            <div style={{ flex: 1 }}>
-              <label style={LABEL}>Available Time</label>
-              <input type="time" style={INPUT} value={availableTime} onChange={e => setAvailableTime(e.target.value)} />
-            </div>
+            {availabilityMode === 'spot' && (
+              <div style={{ fontSize: 12, color: T.textMuted, marginTop: 8 }}>
+                Always listed — flip "In Stock" below whenever you run out.
+              </div>
+            )}
+            {availabilityMode === 'day' && (
+              <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={LABEL}>Date</label>
+                  <input type="date" style={INPUT} value={availableDate} onChange={e => setAvailableDate(e.target.value)} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={LABEL}>Time (optional)</label>
+                  <input type="time" style={INPUT} value={availableTime} onChange={e => setAvailableTime(e.target.value)} />
+                </div>
+              </div>
+            )}
+            {availabilityMode === 'weekly' && (
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
+                {WEEKDAYS.map(({ key, label }) => (
+                  <button
+                    key={key} type="button" onClick={() => toggleDay(key)}
+                    style={{
+                      padding: '7px 12px', borderRadius: 20, cursor: 'pointer', fontFamily: 'inherit',
+                      fontSize: 12.5, fontWeight: 700,
+                      border: availableDays.includes(key) ? `1.5px solid ${T.primary}` : `1.5px solid ${T.border}`,
+                      background: availableDays.includes(key) ? T.primaryBg : T.surface,
+                      color: availableDays.includes(key) ? T.primaryDark : T.textSub,
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-          <button
-            type="button" onClick={() => setInStock(v => !v)}
-            style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '11px 14px', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit',
-              border: `1.5px solid ${inStock ? T.green : T.red}`,
-              background: inStock ? T.greenBg : T.redBg,
-              color: inStock ? T.green : T.red, fontWeight: 700, fontSize: 13.5,
-            }}
-          >
-            <span>{inStock ? '✓ In Stock' : '✕ Out of Stock'}</span>
-            <span style={{ fontSize: 11, fontWeight: 600, opacity: 0.8 }}>Tap to toggle</span>
-          </button>
+
+          <ToggleRow
+            active={inStock} onClick={() => setInStock(v => !v)}
+            activeLabel="✓ In Stock" inactiveLabel="✕ Out of Stock"
+            activeColor={T.green} inactiveColor={T.red}
+          />
+          <ToggleRow
+            active={visible} onClick={() => setVisible(v => !v)}
+            activeLabel="👁 Available" inactiveLabel="🙈 Currently Not Available"
+            activeColor={T.blue} inactiveColor={T.textMuted}
+          />
+
           {error && <div style={{ fontSize: 13, color: T.red, background: T.redBg, border: '1px solid #fecaca', borderRadius: 8, padding: '8px 12px' }}>{error}</div>}
           <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
             <button type="button" onClick={onClose} style={{ flex: 1, padding: '11px 0', borderRadius: 10, border: `1.5px solid ${T.border}`, background: 'transparent', color: T.textSub, fontFamily: 'inherit', fontSize: 15, cursor: 'pointer' }}>
@@ -147,20 +224,31 @@ function DishFormModal({ initial, onSave, onClose }) {
   );
 }
 
-function DishRow({ dish, onEdit, onToggleStock, onDelete }) {
+function DishRow({ dish, onEdit, onToggleStock, onToggleVisible, onDelete }) {
+  const schedule = describeAvailability(dish);
   return (
-    <div style={{ background: T.surface, borderRadius: 14, border: `1px solid ${T.border}`, padding: 12, display: 'flex', gap: 12, alignItems: 'center' }}>
+    <div style={{ background: T.surface, borderRadius: 14, border: `1px solid ${T.border}`, padding: 12, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
       <div style={{ width: 56, height: 42, borderRadius: 8, overflow: 'hidden', flexShrink: 0, background: T.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         {dish.photo ? <img src={dish.photo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: 20 }}>🍽️</span>}
       </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ flex: 1, minWidth: 120 }}>
         <div style={{ fontWeight: 700, fontSize: 14, color: T.text }}>{dish.name}</div>
         <div style={{ fontSize: 12.5, color: T.textSub, marginTop: 1 }}>
-          {formatCurrency(dish.price)}
-          {(dish.availableDate || dish.availableTime) && ` · ${dish.availableDate ? formatDate(dish.availableDate) : ''} ${formatTime12h(dish.availableTime)}`}
+          {formatCurrency(dish.price)}{schedule ? ` · ${schedule}` : ''}
         </div>
       </div>
-      <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button
+          onClick={() => onToggleVisible(dish)}
+          style={{
+            padding: '5px 10px', borderRadius: 20, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11, fontWeight: 700,
+            border: `1.5px solid ${dish.visible === false ? T.textMuted : T.blue}`,
+            background: dish.visible === false ? T.bg : T.blueBg,
+            color: dish.visible === false ? T.textMuted : T.blue,
+          }}
+        >
+          {dish.visible === false ? 'Hidden' : 'Available'}
+        </button>
         <button
           onClick={() => onToggleStock(dish)}
           style={{
@@ -170,12 +258,12 @@ function DishRow({ dish, onEdit, onToggleStock, onDelete }) {
             color: dish.inStock ? T.green : T.red,
           }}
         >
-          {dish.inStock ? 'In Stock' : 'Out'}
+          {dish.inStock ? 'In Stock' : 'Out of Stock'}
         </button>
         <button onClick={() => onEdit(dish)} style={{ padding: '6px 8px', borderRadius: 8, border: `1.5px solid ${T.border}`, background: 'transparent', color: T.textSub, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12 }}>
           Edit
         </button>
-        <button onClick={() => onDelete(dish)} style={{ padding: '6px 7px', borderRadius: 8, border: '1.5px solid #fecaca', background: 'transparent', color: T.red, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12 }}>
+        <button onClick={() => onDelete(dish)} title="Delete dish" style={{ padding: '6px 7px', borderRadius: 8, border: '1.5px solid #fecaca', background: 'transparent', color: T.red, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12 }}>
           ✕
         </button>
       </div>
@@ -226,7 +314,7 @@ function OrderRow({ order, onAccept, onReject, onDeliver, onMarkPaid }) {
         {order.status === 'accepted' && (
           <button disabled={busy} onClick={() => run(onDeliver)} style={actionBtn(T.blue, T.blueBg)}>Mark Delivered</button>
         )}
-        {order.paymentStatus === 'unpaid' && order.status !== 'rejected' && (
+        {onMarkPaid && order.paymentStatus === 'unpaid' && order.status !== 'rejected' && (
           <button disabled={busy} onClick={() => run(onMarkPaid)} style={actionBtn(T.teal, T.tealBg)}>Mark Payment Received</button>
         )}
       </div>
@@ -238,8 +326,8 @@ function actionBtn(color, bg) {
   return { padding: '8px 14px', borderRadius: 10, border: `1.5px solid ${color}`, background: bg, color, fontWeight: 700, fontSize: 12.5, fontFamily: 'inherit', cursor: 'pointer' };
 }
 
-export default function KitchenDashboard({ kitchen, dishes, orders, onSaveKitchen, onSaveDish, onDeleteDish, onToggleStock, onUpdateOrder }) {
-  const [tab, setTab] = useState('dishes'); // 'dishes' | 'orders' | 'settings'
+export default function KitchenDashboard({ kitchen, dishes, orders, onSaveKitchen, onSaveDish, onDeleteDish, onToggleStock, onToggleVisible, onToggleVacation, onUpdateOrder }) {
+  const [tab, setTab] = useState('dishes'); // 'dishes' | 'orders' | 'preparing' | 'reports' | 'settings'
   const [dishModal, setDishModal] = useState(null); // {} for new, dish for edit, null closed
 
   if (!kitchen) {
@@ -256,6 +344,17 @@ export default function KitchenDashboard({ kitchen, dishes, orders, onSaveKitche
   }
 
   const placedCount = orders.filter(o => o.status === 'placed').length;
+  const preparingCount = orders.filter(o => o.status === 'accepted').length;
+
+  // Orders tab: what's coming in, waiting on an accept/reject decision.
+  const needsAction = orders.filter(o => o.status === 'placed').sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  // Preparing tab: accepted orders, in the exact order they were accepted — a
+  // rejected order never lands here, so there's no ambiguity about what's actually cooking.
+  const preparing = orders
+    .filter(o => o.status === 'accepted')
+    .sort((a, b) => (a.acceptedAt || a.createdAt).localeCompare(b.acceptedAt || b.createdAt));
+  const preparingIds = new Set([...needsAction, ...preparing].map(o => o.id));
+  const history = orders.filter(o => !preparingIds.has(o.id)).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
   return (
     <div>
@@ -264,24 +363,45 @@ export default function KitchenDashboard({ kitchen, dishes, orders, onSaveKitche
           {kitchen.photo ? <img src={kitchen.photo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: 22 }}>👩‍🍳</span>}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 800, fontSize: 15, color: T.text }}>{kitchen.name}</div>
-          <div style={{ fontSize: 12, color: T.textSub }}>{kitchen.upiId}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ fontWeight: 800, fontSize: 15, color: T.text }}>{kitchen.name}</div>
+            {kitchen.onVacation && <Badge status="vacation" />}
+          </div>
+          <div style={{ fontSize: 12, color: T.textSub }}>{kitchen.phone} · {kitchen.upiId}</div>
         </div>
         <button onClick={() => setTab('settings')} style={{ padding: '7px 12px', borderRadius: 8, border: `1.5px solid ${T.border}`, background: 'transparent', color: T.textSub, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5, fontWeight: 600 }}>
           Edit
         </button>
       </div>
 
-      <div style={{ display: 'flex', gap: 6, background: T.surface, borderRadius: 10, padding: 4, border: `1px solid ${T.border}`, marginBottom: 14 }}>
+      {kitchen.onVacation ? (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, background: T.amberBg, border: `1.5px solid ${T.amber}`, borderRadius: 12, padding: '10px 14px', marginBottom: 14 }}>
+          <div style={{ fontSize: 12.5, color: T.amber, fontWeight: 600 }}>🌴 You're on vacation — customers can't place new orders.</div>
+          <button onClick={() => onToggleVacation(kitchen)} style={{ flexShrink: 0, padding: '7px 12px', borderRadius: 8, border: `1.5px solid ${T.amber}`, background: T.surface, color: T.amber, fontWeight: 700, fontSize: 12, fontFamily: 'inherit', cursor: 'pointer' }}>
+            Kitchen Open
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => onToggleVacation(kitchen)}
+          style={{ width: '100%', padding: '9px 0', borderRadius: 10, border: `1.5px solid ${T.border}`, background: T.surface, color: T.textSub, fontWeight: 600, fontSize: 12.5, fontFamily: 'inherit', cursor: 'pointer', marginBottom: 14 }}
+        >
+          🌴 Go On Vacation
+        </button>
+      )}
+
+      <div style={{ display: 'flex', gap: 6, background: T.surface, borderRadius: 10, padding: 4, border: `1px solid ${T.border}`, marginBottom: 14, overflowX: 'auto' }}>
         {[
           { key: 'dishes', label: 'My Dishes' },
           { key: 'orders', label: `Orders${placedCount ? ` (${placedCount})` : ''}` },
+          { key: 'preparing', label: `Preparing${preparingCount ? ` (${preparingCount})` : ''}` },
+          { key: 'reports', label: 'Earnings' },
           { key: 'settings', label: 'Settings' },
         ].map(({ key, label }) => (
           <button
             key={key} onClick={() => setTab(key)}
             style={{
-              flex: 1, padding: '9px 0', borderRadius: 8, border: 'none', cursor: 'pointer',
+              flex: 1, padding: '9px 6px', borderRadius: 8, border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
               background: tab === key ? T.bg : 'transparent',
               color: tab === key ? T.text : T.textMuted,
               fontWeight: tab === key ? 700 : 500, fontFamily: 'inherit', fontSize: 13,
@@ -298,6 +418,8 @@ export default function KitchenDashboard({ kitchen, dishes, orders, onSaveKitche
           <KitchenForm initial={kitchen} onSave={onSaveKitchen} onCancel={() => setTab('dishes')} />
         </div>
       )}
+
+      {tab === 'reports' && <KitchenReports orders={orders} />}
 
       {tab === 'dishes' && (
         <div>
@@ -316,7 +438,8 @@ export default function KitchenDashboard({ kitchen, dishes, orders, onSaveKitche
                   key={dish.id} dish={dish}
                   onEdit={setDishModal}
                   onToggleStock={onToggleStock}
-                  onDelete={d => { if (confirm(`Delete "${d.name}"?`)) onDeleteDish(d.id); }}
+                  onToggleVisible={onToggleVisible}
+                  onDelete={d => { if (confirm(`Delete "${d.name}"? This cannot be undone.`)) onDeleteDish(d.id); }}
                 />
               ))}
             </div>
@@ -325,21 +448,61 @@ export default function KitchenDashboard({ kitchen, dishes, orders, onSaveKitche
       )}
 
       {tab === 'orders' && (
-        orders.length === 0 ? (
-          <EmptyState text="No orders yet." />
+        needsAction.length === 0 ? (
+          <EmptyState text="No new orders — you're all caught up." />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {[...orders].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(order => (
+            {needsAction.map(order => (
               <OrderRow
                 key={order.id} order={order}
                 onAccept={() => onUpdateOrder(order.id, { status: 'accepted', acceptedAt: new Date().toISOString() })}
                 onReject={() => onUpdateOrder(order.id, { status: 'rejected', rejectedAt: new Date().toISOString() })}
-                onDeliver={() => onUpdateOrder(order.id, { status: 'delivered', deliveredAt: new Date().toISOString() })}
-                onMarkPaid={() => onUpdateOrder(order.id, { paymentStatus: 'paid', paidAt: new Date().toISOString() })}
               />
             ))}
           </div>
         )
+      )}
+
+      {tab === 'preparing' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          <section>
+            {preparing.length === 0 ? (
+              <EmptyState text="Nothing being prepared right now." />
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {preparing.map((order, i) => (
+                  <div key={order.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                    <div style={{ flexShrink: 0, width: 22, height: 22, borderRadius: '50%', background: T.primaryBg, color: T.primaryDark, fontSize: 11.5, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 14 }}>
+                      {i + 1}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <OrderRow
+                        order={order}
+                        onDeliver={() => onUpdateOrder(order.id, { status: 'delivered', deliveredAt: new Date().toISOString() })}
+                        onMarkPaid={() => onUpdateOrder(order.id, { paymentStatus: 'paid', paidAt: new Date().toISOString() })}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {history.length > 0 && (
+            <section>
+              <div style={SECTION_LABEL}>History</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {history.map(order => (
+                  <OrderRow
+                    key={order.id} order={order}
+                    onDeliver={() => onUpdateOrder(order.id, { status: 'delivered', deliveredAt: new Date().toISOString() })}
+                    onMarkPaid={() => onUpdateOrder(order.id, { paymentStatus: 'paid', paidAt: new Date().toISOString() })}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
       )}
 
       {dishModal && (
