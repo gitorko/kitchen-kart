@@ -1,7 +1,9 @@
 import { neon } from '@neondatabase/serverless';
 import { requireAuth } from './_auth.js';
+import { withErrorHandling } from './_util.js';
+import { log } from './_log.js';
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   const requester = requireAuth(req, res);
   if (!requester) return;
 
@@ -28,8 +30,11 @@ export default async function handler(req, res) {
   if (req.method === 'POST') {
     const item = { ...req.body, userId: requester.userId, userName: requester.name };
     await sql`INSERT INTO orders (id, data) VALUES (${item.id}, ${JSON.stringify(item)})`;
+    log('order_placed', { orderId: item.id, kitchenId: item.kitchenId, userId: requester.userId, totalAmount: item.totalAmount });
     return res.status(201).json(item);
   }
 
   res.status(405).end();
 }
+
+export default withErrorHandling('orders', handler);

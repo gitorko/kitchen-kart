@@ -1,7 +1,9 @@
 import { neon } from '@neondatabase/serverless';
 import { requireAuth } from '../_auth.js';
+import { withErrorHandling } from '../_util.js';
+import { log } from '../_log.js';
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   const requester = requireAuth(req, res);
   if (!requester) return;
 
@@ -17,8 +19,11 @@ export default async function handler(req, res) {
 
     const item = { ...existing, ...req.body, id, ownerUserId: existing.ownerUserId };
     await sql`UPDATE kitchens SET data = ${JSON.stringify(item)} WHERE id = ${id}`;
+    log('kitchen_updated', { kitchenId: id, by: requester.phone });
     return res.json(item);
   }
 
   res.status(405).end();
 }
+
+export default withErrorHandling('kitchens', handler);

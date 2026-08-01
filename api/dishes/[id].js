@@ -1,5 +1,7 @@
 import { neon } from '@neondatabase/serverless';
 import { requireAuth } from '../_auth.js';
+import { withErrorHandling } from '../_util.js';
+import { log } from '../_log.js';
 
 async function ownsDish(sql, requester, dish) {
   if (requester.role === 'admin') return true;
@@ -9,7 +11,7 @@ async function ownsDish(sql, requester, dish) {
   return kRows[0]?.data?.id === dish.kitchenId;
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   const requester = requireAuth(req, res);
   if (!requester) return;
 
@@ -35,14 +37,18 @@ export default async function handler(req, res) {
     if (!(await ownsDish(sql, requester, existing))) return res.status(403).json({ error: 'Forbidden' });
     const item = { ...existing, ...req.body, id, kitchenId: existing.kitchenId };
     await sql`UPDATE dishes SET data = ${JSON.stringify(item)} WHERE id = ${id}`;
+    log('dish_updated', { dishId: id, by: requester.phone });
     return res.json(item);
   }
 
   if (req.method === 'DELETE') {
     if (!(await ownsDish(sql, requester, existing))) return res.status(403).json({ error: 'Forbidden' });
     await sql`DELETE FROM dishes WHERE id = ${id}`;
+    log('dish_deleted', { dishId: id, by: requester.phone });
     return res.status(204).end();
   }
 
   res.status(405).end();
 }
+
+export default withErrorHandling('dishes', handler);

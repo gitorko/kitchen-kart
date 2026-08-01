@@ -50,12 +50,12 @@ export default function LoginPage({ onLogin, onGoSignup, onBack }) {
             />
           </div>
           <div>
-            <label style={LABEL}>6-digit PIN</label>
+            <label style={LABEL}>4-digit PIN</label>
             <div style={{ position: 'relative' }}>
               <input
                 type={showPin ? 'text' : 'password'} inputMode="numeric" autoComplete="current-password"
-                value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="••••••"
+                value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                placeholder="••••"
                 style={{ ...INPUT, padding: '10px 44px 10px 14px', letterSpacing: 3 }}
               />
               <button type="button" onClick={() => setShowPin(v => !v)}

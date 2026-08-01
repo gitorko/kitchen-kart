@@ -28,9 +28,9 @@ export function generateCode(len = 6) {
   return out;
 }
 
-export function createToken(payload) {
+export function createToken(payload, ttlMs = TOKEN_TTL_MS) {
   const body = Buffer.from(
-    JSON.stringify({ ...payload, exp: Date.now() + TOKEN_TTL_MS })
+    JSON.stringify({ ...payload, exp: Date.now() + ttlMs })
   ).toString('base64url');
   const sig = createHmac('sha256', SECRET).update(body).digest('base64url');
   return `${body}.${sig}`;

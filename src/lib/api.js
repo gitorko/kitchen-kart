@@ -1,4 +1,4 @@
-import { authFetch, getSession } from './auth.js';
+import { authFetch, getSession, parseJson } from './auth.js';
 
 const IS_DEV = !import.meta.env.PROD;
 
@@ -30,16 +30,16 @@ function makeLocalCrud(key) {
 
 function makeRemoteCrud(path) {
   return {
-    getAll: () => authFetch(`/api/${path}`).then(r => r.json()),
+    getAll: () => authFetch(`/api/${path}`).then(parseJson),
     create: (item) => authFetch(`/api/${path}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(item),
-    }).then(r => r.json()),
+    }).then(parseJson),
     update: (item) => authFetch(`/api/${path}/${item.id}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(item),
-    }).then(r => r.json()),
-    remove: (id) => authFetch(`/api/${path}/${id}`, { method: 'DELETE' }),
+    }).then(parseJson),
+    remove: (id) => authFetch(`/api/${path}/${id}`, { method: 'DELETE' }).then(parseJson),
   };
 }
 
@@ -60,5 +60,5 @@ export async function toggleDishHeart(dish, heart) {
     method: 'PUT', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ heart }),
   });
-  return res.json();
+  return parseJson(res);
 }

@@ -40,7 +40,7 @@ export default function SignupPage({ onGoLogin, onBack }) {
     if (!name.trim()) return setError('Name is required.');
     if (!/^\d{10}$/.test(phone)) return setError('Enter a valid 10-digit phone number.');
     if (!apartment.trim()) return setError('Apartment number is required.');
-    if (!/^\d{6}$/.test(pin)) return setError('PIN must be exactly 6 digits.');
+    if (!/^\d{4}$/.test(pin)) return setError('PIN must be exactly 4 digits.');
     if (pin !== confirmPin) return setError('PINs do not match.');
 
     setLoading(true);
@@ -123,14 +123,14 @@ export default function SignupPage({ onGoLogin, onBack }) {
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
             <div style={{ flex: 1 }}>
-              <label style={LABEL}>6-digit PIN</label>
+              <label style={LABEL}>4-digit PIN</label>
               <input type="password" inputMode="numeric" style={{ ...INPUT, letterSpacing: 3 }} value={pin}
-                onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="••••••" />
+                onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="••••" />
             </div>
             <div style={{ flex: 1 }}>
               <label style={LABEL}>Confirm PIN</label>
               <input type="password" inputMode="numeric" style={{ ...INPUT, letterSpacing: 3 }} value={confirmPin}
-                onChange={e => setConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="••••••" />
+                onChange={e => setConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="••••" />
             </div>
           </div>
           {error && (

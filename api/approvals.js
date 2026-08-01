@@ -1,7 +1,9 @@
 import { neon } from '@neondatabase/serverless';
 import { requireAuth } from './_auth.js';
+import { withErrorHandling } from './_util.js';
+import { log as logEvent } from './_log.js';
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   const requester = requireAuth(req, res, ['admin', 'kitchen']);
   if (!requester) return;
 
@@ -44,8 +46,11 @@ export default async function handler(req, res) {
       createdAt: new Date().toISOString(),
     };
     await sql`INSERT INTO approvals (id, data) VALUES (${logId}, ${JSON.stringify(log)})`;
+    logEvent('approval_decided', { userId, action, by: requester.phone });
     return res.status(201).json(log);
   }
 
   res.status(405).end();
 }
+
+export default withErrorHandling('approvals', handler);

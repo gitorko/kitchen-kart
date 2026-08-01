@@ -1,14 +1,16 @@
 import { neon } from '@neondatabase/serverless';
 import { hashPin, generateCode } from '../_auth.js';
+import { withErrorHandling } from '../_util.js';
+import { log } from '../_log.js';
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
   const { name, phone, apartment, pin, role } = req.body || {};
 
   if (!name?.trim() || !phone?.trim() || !apartment?.trim() || !pin?.trim())
     return res.status(400).json({ error: 'All fields are required' });
-  if (!/^\d{6}$/.test(pin))
-    return res.status(400).json({ error: 'PIN must be exactly 6 digits' });
+  if (!/^\d{4}$/.test(pin))
+    return res.status(400).json({ error: 'PIN must be exactly 4 digits' });
   if (!['customer', 'kitchen'].includes(role))
     return res.status(400).json({ error: 'Invalid role' });
 
@@ -36,5 +38,8 @@ export default async function handler(req, res) {
     createdAt: new Date().toISOString(),
   };
   await sql`INSERT INTO users (id, data) VALUES (${id}, ${JSON.stringify(user)})`;
+  log('signup', { phone: user.phone, role });
   return res.status(201).json({ code, userId: id });
 }
+
+export default withErrorHandling('auth', handler);

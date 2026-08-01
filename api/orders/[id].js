@@ -1,7 +1,9 @@
 import { neon } from '@neondatabase/serverless';
 import { requireAuth } from '../_auth.js';
+import { withErrorHandling } from '../_util.js';
+import { log } from '../_log.js';
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   const requester = requireAuth(req, res);
   if (!requester) return;
 
@@ -25,8 +27,12 @@ export default async function handler(req, res) {
 
     const item = { ...existing, ...req.body, id, userId: existing.userId, kitchenId: existing.kitchenId };
     await sql`UPDATE orders SET data = ${JSON.stringify(item)} WHERE id = ${id}`;
+    if (req.body?.status) log('order_status_changed', { orderId: id, status: req.body.status, by: requester.phone });
+    if (req.body?.paymentStatus) log('order_payment_marked', { orderId: id, paymentStatus: req.body.paymentStatus, by: requester.phone });
     return res.json(item);
   }
 
   res.status(405).end();
 }
+
+export default withErrorHandling('orders', handler);

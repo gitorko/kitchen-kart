@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { T } from './theme.js';
-import { getSession } from './lib/auth.js';
-import { logout, fetchApprovals, submitApproval } from './lib/authApi.js';
+import { getSession, isImpersonating, stopImpersonation } from './lib/auth.js';
+import { logout, fetchApprovals, submitApproval, impersonateUser } from './lib/authApi.js';
 import { kitchensApi, dishesApi, ordersApi, toggleDishHeart } from './lib/api.js';
 import LoginPage from './components/LoginPage.jsx';
 import SignupPage from './components/SignupPage.jsx';
@@ -9,7 +9,9 @@ import HomePage from './components/HomePage.jsx';
 import OrdersPage from './components/OrdersPage.jsx';
 import KitchenDashboard from './components/KitchenDashboard.jsx';
 import AdminApprovals from './components/AdminApprovals.jsx';
+import AdminUsers from './components/AdminUsers.jsx';
 import CartDrawer from './components/CartDrawer.jsx';
+import UserMenu from './components/UserMenu.jsx';
 
 const IS_DEV = !import.meta.env.PROD;
 const CART_KEY = 'kk_cart';
@@ -225,54 +227,72 @@ function AppShell({ session, onRequireAuth, onLogout }) {
     setHighlightCode(null);
   }
 
+  // ── Admin: impersonate a user ──
+  async function handleImpersonate(userId) {
+    await impersonateUser(userId);
+    window.location.reload();
+  }
+  function handleStopImpersonation() {
+    stopImpersonation();
+    window.location.reload();
+  }
+
   const TABS = [
     { key: 'home', label: '🏠 Home' },
     session?.role === 'customer' && { key: 'orders', label: '🧾 My Orders' },
     session?.role === 'kitchen' && { key: 'kitchen', label: '👩‍🍳 My Kitchen' },
     session && canApprove && { key: 'approvals', label: `✅ Approvals${approvals.pending.length ? ` (${approvals.pending.length})` : ''}` },
+    session?.role === 'admin' && { key: 'users', label: '👥 Users' },
   ].filter(Boolean);
 
   return (
     <div style={{ minHeight: '100vh', background: T.bg, color: T.text }}>
+      {isImpersonating() && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, flexWrap: 'wrap',
+          padding: '8px 16px', fontSize: 12.5, background: '#f3ead9', color: '#8a6d3b', borderBottom: '1px solid #e0d3b8',
+        }}>
+          <span>👁 Viewing as <strong>{session?.name} ({session?.phone})</strong></span>
+          <button
+            type="button" onClick={handleStopImpersonation}
+            style={{ border: '1px solid #8a6d3b', borderRadius: 8, background: 'transparent', color: '#8a6d3b', padding: '3px 10px', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+          >
+            Stop Impersonation
+          </button>
+        </div>
+      )}
       <div style={{ maxWidth: 720, margin: '0 auto', padding: '0 16px 90px' }}>
 
-        <div style={{ padding: '16px 0 12px', position: 'sticky', top: 0, background: T.bg, zIndex: 20, borderBottom: `1px solid ${T.border}`, marginBottom: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, gap: 8 }}>
-            <div style={{ minWidth: 0 }}>
-              <h1 style={{ fontSize: 19, fontWeight: 800, color: T.text, letterSpacing: -0.3, whiteSpace: 'nowrap' }}>🍲 Kitchen Kart</h1>
-              <p style={{ color: T.textSub, fontSize: 11, marginTop: 2 }}>{session ? `Hi, ${session.name || 'there'}` : 'Home-cooked food from your neighbours'}</p>
-            </div>
+        <div style={{ padding: '14px 0', position: 'sticky', top: 0, background: T.bg, zIndex: 20, borderBottom: `1px solid ${T.border}`, marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 2, rowGap: 8, flexWrap: 'wrap' }}>
+            <h1 style={{ fontSize: 18, fontWeight: 800, color: T.text, letterSpacing: -0.3, whiteSpace: 'nowrap', marginRight: 'auto', paddingRight: 10 }}>
+              🍲 Kitchen Kart
+            </h1>
+            {TABS.map(({ key, label }) => (
+              <button
+                key={key} onClick={() => setTab(key)}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+                  fontSize: 12.5, fontWeight: tab === key ? 700 : 500, whiteSpace: 'nowrap',
+                  color: tab === key ? T.text : T.textMuted, padding: '6px 8px',
+                  borderBottom: `2px solid ${tab === key ? T.primary : 'transparent'}`,
+                }}
+              >
+                {label}
+              </button>
+            ))}
+            <div style={{ width: 1, height: 18, background: T.border, margin: '0 6px' }} />
             {session ? (
-              <button onClick={onLogout} style={{ background: 'none', border: 'none', fontSize: 12, color: T.textMuted, cursor: 'pointer', fontFamily: 'inherit', padding: '4px 2px', fontWeight: 500, flexShrink: 0 }}>Sign out</button>
+              <UserMenu name={session.name} onLogout={onLogout} />
             ) : (
               <button
                 onClick={onRequireAuth}
-                style={{ background: T.primary, color: '#fff', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}
+                style={{ background: T.primary, color: '#fff', border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
               >
                 Sign In
               </button>
             )}
           </div>
-
-          {TABS.length > 1 && (
-            <div style={{ display: 'flex', gap: 6, background: T.surface, borderRadius: 10, padding: 4, border: `1px solid ${T.border}`, overflowX: 'auto' }}>
-              {TABS.map(({ key, label }) => (
-                <button
-                  key={key} onClick={() => setTab(key)}
-                  style={{
-                    flex: 1, padding: '9px 4px', borderRadius: 8, border: 'none', cursor: 'pointer',
-                    background: tab === key ? T.bg : 'transparent',
-                    color: tab === key ? T.text : T.textMuted,
-                    fontWeight: tab === key ? 700 : 500, fontFamily: 'inherit', fontSize: 12.5,
-                    whiteSpace: 'nowrap',
-                    boxShadow: tab === key ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
 
         {IS_DEV && (
@@ -307,6 +327,8 @@ function AppShell({ session, onRequireAuth, onLogout }) {
             pending={approvals.pending} history={approvals.history} highlightCode={highlightCode}
             onApprove={approveUser} onReject={rejectUser}
           />
+        ) : tab === 'users' ? (
+          <AdminUsers onImpersonate={handleImpersonate} />
         ) : null}
       </div>
 

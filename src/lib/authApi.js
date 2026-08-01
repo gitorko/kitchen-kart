@@ -1,4 +1,4 @@
-import { getSession, setSession, clearSession, authFetch } from './auth.js';
+import { getSession, setSession, clearSession, authFetch, parseJson, startImpersonation } from './auth.js';
 
 const IS_DEV = !import.meta.env.PROD;
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I — easy to read aloud/type
@@ -18,7 +18,7 @@ const USERS_KEY = 'kk_users';
 const APPROVALS_KEY = 'kk_approvals';
 
 function adminCreds() {
-  return { phone: import.meta.env.VITE_ADMIN_PHONE, pin: import.meta.env.VITE_ADMIN_PIN };
+  return { phone: import.meta.env.ADMIN_PHONE, pin: import.meta.env.ADMIN_PIN };
 }
 
 export async function signup({ name, phone, apartment, pin, role }) {
@@ -27,7 +27,7 @@ export async function signup({ name, phone, apartment, pin, role }) {
     const { phone: adminPhone } = adminCreds();
     if (phone === adminPhone || users.some(u => u.phone === phone))
       throw new Error('An account with this phone number already exists');
-    const id = Date.now().toString();
+    const id = Date.now();
     const code = generateCode();
     users.push({ id, name, phone, apartment, pin, role, status: 'pending', code, createdAt: new Date().toISOString() });
     lsSet(USERS_KEY, users);
@@ -37,9 +37,7 @@ export async function signup({ name, phone, apartment, pin, role }) {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, phone, apartment, pin, role }),
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Signup failed');
-  return data;
+  return parseJson(res);
 }
 
 export async function login({ phone, pin }) {
@@ -70,12 +68,7 @@ export async function login({ phone, pin }) {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ phone, pin }),
   });
-  const data = await res.json();
-  if (!res.ok) {
-    const err = new Error(data.error || 'Login failed');
-    err.status = data.status; err.code = data.code;
-    throw err;
-  }
+  const data = await parseJson(res);
   const session = { token: data.token, ...data.user };
   setSession(session);
   return session;
@@ -91,8 +84,7 @@ export async function fetchApprovals() {
       history: lsGet(APPROVALS_KEY, []),
     };
   }
-  const res = await authFetch('/api/approvals');
-  return res.json();
+  return parseJson(await authFetch('/api/approvals'));
 }
 
 export async function submitApproval({ userId, action }) {
@@ -104,7 +96,7 @@ export async function submitApproval({ userId, action }) {
     user.status = action === 'approve' ? 'approved' : 'rejected';
     lsSet(USERS_KEY, users);
     const log = {
-      id: Date.now().toString(), userId, userName: user.name, userPhone: user.phone,
+      id: Date.now(), userId, userName: user.name, userPhone: user.phone,
       approvedByUserId: session.userId, approvedByName: session.name,
       action, code: user.code, createdAt: new Date().toISOString(),
     };
@@ -117,7 +109,32 @@ export async function submitApproval({ userId, action }) {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ userId, action }),
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Failed to update');
-  return data;
+  return parseJson(res);
+}
+
+// Admin-only: list every user (for the impersonation picker).
+export async function fetchAllUsers() {
+  if (IS_DEV) {
+    return lsGet(USERS_KEY, []).map(({ pin, ...rest }) => rest);
+  }
+  return parseJson(await authFetch('/api/users'));
+}
+
+// Admin-only: sign in as another approved user without knowing their PIN, to see
+// the app exactly as they would. The admin's own session is parked so "Stop
+// Impersonation" can restore it.
+export async function impersonateUser(userId) {
+  if (IS_DEV) {
+    const user = lsGet(USERS_KEY, []).find(u => u.id === userId);
+    if (!user) throw new Error('User not found');
+    if (user.status !== 'approved') throw new Error('Can only impersonate an approved user');
+    startImpersonation({ token: 'dev', userId: user.id, phone: user.phone, role: user.role, name: user.name, apartment: user.apartment });
+    return;
+  }
+  const res = await authFetch('/api/users', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId }),
+  });
+  const data = await parseJson(res);
+  startImpersonation({ token: data.token, ...data.user });
 }

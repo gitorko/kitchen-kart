@@ -1,7 +1,9 @@
 import { neon } from '@neondatabase/serverless';
 import { requireAuth } from './_auth.js';
+import { withErrorHandling } from './_util.js';
+import { log } from './_log.js';
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   const sql = neon(process.env.DATABASE_URL);
   await sql`CREATE TABLE IF NOT EXISTS kitchens (id BIGINT PRIMARY KEY, data JSONB NOT NULL)`;
 
@@ -22,8 +24,11 @@ export default async function handler(req, res) {
 
     const item = { ...req.body, ownerUserId: requester.userId };
     await sql`INSERT INTO kitchens (id, data) VALUES (${item.id}, ${JSON.stringify(item)})`;
+    log('kitchen_created', { kitchenId: item.id, name: item.name, by: requester.phone });
     return res.status(201).json(item);
   }
 
   res.status(405).end();
 }
+
+export default withErrorHandling('kitchens', handler);
