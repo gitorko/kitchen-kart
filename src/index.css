@@ -1,0 +1,42 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap');
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  overflow-x: hidden;
+}
+
+body {
+  font-family: 'Outfit', 'Segoe UI', sans-serif;
+  background: #fff8f0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button, input, select, textarea {
+  font-family: inherit;
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: #ff4500 !important;
+  box-shadow: 0 0 0 3px #ff450018;
+}
+
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: #e8d2ba; border-radius: 10px; }
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (max-width: 420px) {
+  html { font-size: 15px; }
+}
